@@ -1,323 +1,330 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  FlatList,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
-import { ROLES, DIFFICULTY_LEVELS } from '../../constants/config';
+import { DIFFICULTY_LEVELS } from '../../constants/config';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import useInterviewStore from '../../store/interviewStore';
 
 const HomeScreen = () => {
   const { setRole, setDifficulty } = useInterviewStore();
-  const [selectedRole, setSelectedRole] = useState(null);
+  const [roleInput, setRoleInput] = useState(''); // Dynamic input instead of hardcoded chips
   const [selectedDifficulty, setSelectedDifficulty] = useState('intermediate');
 
   const handleStartInterview = () => {
-    if (!selectedRole) return;
-    setRole(selectedRole);
+    const trimmedRole = roleInput.trim();
+    if (!trimmedRole) return;
+    setRole(trimmedRole);
     setDifficulty(selectedDifficulty);
     router.push('/interview/session');
   };
 
-  const handleResumeAnalyzer = () => {
-    router.push('/resume/analyze');
-  };
-
   const features = [
-    {
-      icon: '🎤',
-      title: 'Mock Interview',
-      description: 'Practice with AI-generated questions and get instant feedback',
-      color: Colors.primary,
-      action: () => {},
-    },
-    {
-      icon: '📄',
-      title: 'Resume Analyzer',
-      description: 'Get AI-powered feedback on your resume',
-      color: Colors.secondary,
-      action: handleResumeAnalyzer,
-    },
-    {
-      icon: '📋',
-      title: 'Question Bank',
-      description: 'Browse role-specific interview questions',
-      color: Colors.success,
-      action: () => router.push('/questions'),
-    },
-    {
-      icon: '📊',
-      title: 'Progress Tracking',
-      description: 'Track your improvement over time',
-      color: Colors.warning,
-      action: () => router.push('/history'),
-    },
+    { icon: 'library-outline', title: 'Question Bank', desc: 'Browse curated questions by role', color: Colors.info, route: '/questions' },
+    { icon: 'document-text-outline', title: 'Resume Analyzer', desc: 'ATS score & AI rewrites', color: Colors.secondary, route: '/resume/analyze' },
+    { icon: 'time-outline', title: 'My Progress', desc: 'Track interview history', color: Colors.success, route: '/history' },
+    { icon: 'school-outline', title: 'STAR Method', desc: 'Learn the best answering framework', color: Colors.warning, route: null }, // Placeholder for future expansion
   ];
 
   return (
-    <ScrollView 
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {/* Header */}
-      <View style={styles.header}>
-        <View>
-          <Text style={styles.greeting}>Hello! 👋</Text>
-          <Text style={styles.title}>Ready to ace your interview?</Text>
-        </View>
-        <View style={styles.avatar}>
-          <Ionicons name="person" size={24} color={Colors.primary} />
-        </View>
-      </View>
-
-      {/* Quick Start Card */}
-      <Card style={styles.quickStartCard} variant="primary">
-        <Text style={styles.quickStartTitle}>⚡ Quick Start Interview</Text>
-        <Text style={styles.quickStartSubtitle}>Select your role and difficulty to begin</Text>
+    <View style={styles.screen}>
+      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         
-        {/* Role Selection */}
-        <Text style={styles.sectionLabel}>Select Role</Text>
-        <View style={styles.chipsContainer}>
-          {ROLES.slice(0, 4).map((role) => (
-            <TouchableOpacity
-              key={role}
-              style={[
-                styles.chip,
-                selectedRole === role && styles.chipSelected,
-              ]}
-              onPress={() => setSelectedRole(role)}
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>Welcome back</Text>
+            <Text style={styles.title}>Ace Your Next Interview</Text>
+          </View>
+          <View style={styles.avatarContainer}>
+            <Ionicons name="person-circle" size={46} color={Colors.bgElevated} />
+          </View>
+        </View>
+
+        {/* Main Setup Card */}
+        <Card style={styles.setupCard} padding="lg">
+          <Text style={styles.sectionTitle}>Quick Setup</Text>
+          
+          {/* Dynamic Role Input */}
+          <Text style={styles.label}>Target Role</Text>
+          <View style={styles.inputContainer}>
+            <Ionicons name="briefcase-outline" size={20} color={Colors.textMuted} style={styles.inputIcon} />
+            <TextInput
+              style={styles.roleInput}
+              placeholder="e.g., Frontend Developer, Product Manager, Nurse..."
+              placeholderTextColor={Colors.textMuted}
+              value={roleInput}
+              onChangeText={setRoleInput}
+              autoCapitalize="words"
+              autoCorrect={false}
+            />
+          </View>
+
+          {/* Difficulty */}
+          <Text style={[styles.label, { marginTop: Spacing.lg }]}>Difficulty Level</Text>
+          <View style={styles.difficultyRow}>
+            {DIFFICULTY_LEVELS.map((level) => (
+              <TouchableOpacity
+                key={level.value}
+                style={[
+                  styles.diffCard, 
+                  selectedDifficulty === level.value && { 
+                    borderColor: level.color, 
+                    backgroundColor: level.color + '15',
+                    ...Shadows.small
+                  }
+                ]}
+                onPress={() => setSelectedDifficulty(level.value)}
+              >
+                <Text style={styles.diffIcon}>{level.icon}</Text>
+                <Text style={[styles.diffLabel, selectedDifficulty === level.value && { color: level.color }]}>
+                  {level.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          <View style={styles.buttonContainer}>
+            <Button
+              title="Start AI Interview"
+              onPress={handleStartInterview}
+              disabled={roleInput.trim().length < 2}
+              fullWidth
+              size="large"
+              icon={<Ionicons name="arrow-forward-circle" size={22} color={Colors.textPrimary} style={{marginRight: 4}} />}
+            />
+          </View>
+        </Card>
+
+        {/* Features Grid (2x2) */}
+        <Text style={styles.sectionTitle}>Explore Tools</Text>
+        <View style={styles.featuresGrid}>
+          {features.map((f, i) => (
+            <TouchableOpacity 
+              key={i} 
+              style={styles.featureCard} 
+              onPress={() => f.route ? router.push(f.route) : null} 
+              activeOpacity={0.7}
+              disabled={!f.route} // Disables the placeholder
             >
-              <Text style={[
-                styles.chipText,
-                selectedRole === role && styles.chipTextSelected,
-              ]}>
-                {role}
-              </Text>
+              <View style={[styles.featureIconBg, { backgroundColor: f.color + '15' }]}>
+                <Ionicons name={f.icon} size={22} color={f.color} />
+              </View>
+              <Text style={styles.featureTitle}>{f.title}</Text>
+              <Text style={styles.featureDesc}>{f.desc}</Text>
+              {!f.route && (
+                <View style={styles.comingSoonBadge}>
+                  <Text style={styles.comingSoonText}>Soon</Text>
+                </View>
+              )}
             </TouchableOpacity>
           ))}
         </View>
-        
-        {/* Show more roles */}
-        <TouchableOpacity 
-          style={styles.showMore}
-          onPress={() => router.push('/questions')}
-        >
-          <Text style={styles.showMoreText}>See all roles →</Text>
-        </TouchableOpacity>
 
-        {/* Difficulty Selection */}
-        <Text style={styles.sectionLabel}>Difficulty Level</Text>
-        <View style={styles.difficultyContainer}>
-          {DIFFICULTY_LEVELS.map((level) => (
-            <TouchableOpacity
-              key={level.value}
-              style={[
-                styles.difficultyCard,
-                selectedDifficulty === level.value && {
-                  borderColor: level.color,
-                  backgroundColor: level.color + '20',
-                },
-              ]}
-              onPress={() => setSelectedDifficulty(level.value)}
-            >
-              <Text style={styles.difficultyIcon}>{level.icon}</Text>
-              <Text style={[
-                styles.difficultyLabel,
-                selectedDifficulty === level.value && { color: level.color },
-              ]}>
-                {level.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        {/* Professional Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Powered by Advanced AI</Text>
+          <Text style={styles.footerSubtext}>Your data is secure and private</Text>
         </View>
 
-        <Button
-          title="Start Interview"
-          onPress={handleStartInterview}
-          disabled={!selectedRole}
-          fullWidth
-          size="large"
-        />
-      </Card>
-
-      {/* Features Grid */}
-      <Text style={styles.featuresTitle}>Explore Features</Text>
-      <View style={styles.featuresGrid}>
-        {features.map((feature, index) => (
-          <Card
-            key={index}
-            style={styles.featureCard}
-            padding="lg"
-          >
-            <Text style={styles.featureIcon}>{feature.icon}</Text>
-            <Text style={styles.featureTitle}>{feature.title}</Text>
-            <Text style={styles.featureDescription}>{feature.description}</Text>
-            <TouchableOpacity onPress={feature.action}>
-              <Text style={styles.featureLink}>Try now →</Text>
-            </TouchableOpacity>
-          </Card>
-        ))}
-      </View>
-
-      <View style={{ height: Spacing.xxl }} />
-    </ScrollView>
+      </ScrollView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
+  screen: { 
+    flex: 1, 
+    backgroundColor: Colors.bgPrimary 
   },
-  content: {
-    padding: Spacing.lg,
+  scrollView: { 
+    flex: 1 
   },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: Spacing.lg,
+  content: { 
+    padding: Spacing.lg, 
+    paddingTop: Spacing.xl,
+    paddingBottom: Spacing.xxl 
   },
-  greeting: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.md,
-  },
-  title: {
-    color: Colors.text,
-    fontSize: FontSizes.xxl,
-    fontWeight: '700',
-    marginTop: Spacing.xs,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.primary + '20',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  quickStartCard: {
+  
+  // Header
+  header: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
     marginBottom: Spacing.xl,
+    marginTop: Spacing.sm
   },
-  quickStartTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-    marginBottom: Spacing.xs,
+  greeting: { 
+    color: Colors.textMuted, 
+    fontSize: FontSizes.sm, 
+    fontWeight: '600', 
+    textTransform: 'uppercase', 
+    letterSpacing: 1.5 
   },
-  quickStartSubtitle: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    marginBottom: Spacing.lg,
+  title: { 
+    color: Colors.textPrimary, 
+    fontSize: FontSizes.xxl, 
+    fontWeight: '800', 
+    marginTop: Spacing.xs 
   },
-  sectionLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-    marginBottom: Spacing.sm,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  chipsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-  },
-  chip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+  avatarContainer: {
+    backgroundColor: Colors.bgCard,
     borderRadius: Radius.full,
-    backgroundColor: Colors.background,
+    overflow: 'hidden',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.border
   },
-  chipSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+
+  // Setup Card
+  setupCard: { 
+    marginBottom: Spacing.xl,
+    ...Shadows.medium 
   },
-  chipText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
+  sectionTitle: { 
+    color: Colors.textPrimary, 
+    fontSize: FontSizes.lg, 
+    fontWeight: '700', 
+    marginBottom: Spacing.lg 
   },
-  chipTextSelected: {
-    color: Colors.text,
+  
+  // Input Styling (Senior Dev Touch)
+  label: { 
+    color: Colors.textSecondary, 
+    fontSize: FontSizes.xs, 
+    fontWeight: '700', 
+    marginBottom: Spacing.sm, 
+    textTransform: 'uppercase', 
+    letterSpacing: 0.8 
   },
-  showMore: {
-    marginTop: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  showMoreText: {
-    color: Colors.primaryLight,
-    fontSize: FontSizes.sm,
-  },
-  difficultyContainer: {
+  inputContainer: {
     flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  difficultyCard: {
-    flex: 1,
     alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.bgElevated,
     borderWidth: 1.5,
     borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    height: 54, // Fixed height for consistency
   },
-  difficultyIcon: {
-    fontSize: 24,
-    marginBottom: Spacing.xs,
+  inputIcon: {
+    marginRight: Spacing.sm,
   },
-  difficultyLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
+  roleInput: { 
+    flex: 1, 
+    color: Colors.textPrimary, 
+    fontSize: FontSizes.md, 
     fontWeight: '500',
+    height: '100%',
+    paddingVertical: Spacing.sm // Prevents text clipping
   },
-  featuresTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    marginBottom: Spacing.md,
+
+  // Difficulty
+  difficultyRow: { 
+    flexDirection: 'row', 
+    gap: Spacing.sm, 
+    marginTop: Spacing.sm 
   },
-  featuresGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.md,
+  diffCard: { 
+    flex: 1, 
+    paddingVertical: Spacing.md, 
+    borderRadius: Radius.md, 
+    backgroundColor: Colors.bgElevated, 
+    borderWidth: 1.5, 
+    borderColor: Colors.border, 
+    alignItems: 'center',
+    transition: 'all 0.2s' // Note: React native doesn't fully support CSS transitions, but good practice for web parity
   },
-  featureCard: {
-    width: '47%',
+  diffIcon: { 
+    fontSize: 24, 
+    marginBottom: 6 
   },
-  featureIcon: {
-    fontSize: 32,
-    marginBottom: Spacing.sm,
+  diffLabel: { 
+    color: Colors.textMuted, 
+    fontSize: FontSizes.xs, 
+    fontWeight: '700' 
   },
-  featureTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
+
+  buttonContainer: {
+    marginTop: Spacing.xl,
   },
-  featureDescription: {
-    color: Colors.textSecondary,
+
+  // Features Grid (2x2)
+  featuresGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: Spacing.md 
+  },
+  featureCard: { 
+    width: '47%', // Forces exactly 2 columns with gap in between
+    backgroundColor: Colors.bgCard, 
+    borderWidth: 1, 
+    borderColor: Colors.border, 
+    borderRadius: Radius.lg, 
+    padding: Spacing.lg, 
+    ...Shadows.small,
+    position: 'relative',
+    opacity: 1,
+  },
+  featureIconBg: { 
+    width: 48, 
+    height: 48, 
+    borderRadius: Radius.md, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    marginBottom: Spacing.md 
+  },
+  featureTitle: { 
+    color: Colors.textPrimary, 
+    fontSize: FontSizes.md, 
+    fontWeight: '700', 
+    marginBottom: 4 
+  },
+  featureDesc: { 
+    color: Colors.textMuted, 
+    fontSize: FontSizes.xs, 
+    lineHeight: 18 
+  },
+  comingSoonBadge: {
+    position: 'absolute',
+    top: Spacing.md,
+    right: Spacing.md,
+    backgroundColor: Colors.bgElevated,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: Radius.sm,
+    borderWidth: 1,
+    borderColor: Colors.border
+  },
+  comingSoonText: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700'
+  },
+
+  // Footer
+  footer: {
+    alignItems: 'center',
+    marginTop: Spacing.xxl,
+    paddingTop: Spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    width: '100%'
+  },
+  footerText: {
+    color: Colors.textMuted,
     fontSize: FontSizes.xs,
-    lineHeight: 18,
-    marginBottom: Spacing.md,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1
   },
-  featureLink: {
-    color: Colors.primaryLight,
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-  },
+  footerSubtext: {
+    color: Colors.textMuted,
+    fontSize: FontSizes.xs,
+    marginTop: 4,
+    opacity: 0.7
+  }
 });
 
 export default HomeScreen;

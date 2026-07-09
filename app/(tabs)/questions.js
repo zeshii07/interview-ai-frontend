@@ -6,9 +6,10 @@ import {
   FlatList,
   TouchableOpacity,
   Alert,
+  TextInput,
 } from 'react-native';
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
-import { ROLES } from '../../constants/config';
+import { Ionicons } from '@expo/vector-icons';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import LoadingOverlay from '../../components/ui/LoadingOverlay';
@@ -16,12 +17,12 @@ import useInterviewStore from '../../store/interviewStore';
 
 const QuestionsScreen = () => {
   const { questionBank, isGeneratingQuestion, loadQuestionBank, error, clearError } = useInterviewStore();
-  const [selectedRole, setSelectedRole] = useState(null);
+  const [selectedRole, setSelectedRole] = useState('');
 
   const handleLoadQuestions = async () => {
-    if (!selectedRole) return;
+    if (selectedRole.trim().length < 2) return;
     try {
-      await loadQuestionBank(selectedRole);
+      await loadQuestionBank(selectedRole.trim());
     } catch (err) {
       Alert.alert('Error', err.message);
     }
@@ -32,7 +33,7 @@ const QuestionsScreen = () => {
       case 'beginner': return Colors.success;
       case 'intermediate': return Colors.warning;
       case 'expert': return Colors.error;
-      default: return Colors.textSecondary;
+      default: return Colors.textMuted;
     }
   };
 
@@ -51,7 +52,7 @@ const QuestionsScreen = () => {
       
       {item.key_points?.length > 0 && (
         <View style={styles.pointsContainer}>
-          <Text style={styles.pointsTitle">Key Points to Cover:</Text>
+          <Text style={styles.pointsTitle}>Key Points to Cover:</Text>
           {item.key_points.map((point, i) => (
             <Text key={i} style={styles.pointText}>• {point}</Text>
           ))}
@@ -61,7 +62,7 @@ const QuestionsScreen = () => {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
       {isGeneratingQuestion && <LoadingOverlay message="Generating question bank..." />}
       
       <FlatList
@@ -72,35 +73,29 @@ const QuestionsScreen = () => {
         ListHeaderComponent={
           <View>
             <Text style={styles.title}>Question Bank</Text>
-            <Text style={styles.subtitle}>Select a role to load targeted questions</Text>
+            <Text style={styles.subtitle}>Search any role to load targeted questions</Text>
             
-            {/* Role Selection Grid */}
-            <View style={styles.roleGrid}>
-              {ROLES.map((role) => (
-                <TouchableOpacity
-                  key={role}
-                  style={[
-                    styles.roleCard,
-                    selectedRole === role && styles.roleCardSelected,
-                  ]}
-                  onPress={() => setSelectedRole(role)}
-                >
-                  <Text style={[
-                    styles.roleText,
-                    selectedRole === role && styles.roleTextSelected,
-                  ]}>
-                    {role}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Sleek Search Input */}
+            <View style={styles.inputWrapper}>
+              <Ionicons name="search-outline" size={20} color={Colors.textMuted} />
+              <TextInput
+                style={styles.roleInput}
+                placeholder="e.g., Product Manager, UX Designer..."
+                placeholderTextColor={Colors.textMuted}
+                value={selectedRole}
+                onChangeText={setSelectedRole}
+                autoCapitalize="words"
+                autoCorrect={false}
+              />
             </View>
 
             <Button
               title="Load Questions"
               onPress={handleLoadQuestions}
-              disabled={!selectedRole || isGeneratingQuestion}
+              disabled={selectedRole.trim().length < 2 || isGeneratingQuestion}
               fullWidth
               style={styles.loadButton}
+              icon={<Ionicons name="download-outline" size={18} color={Colors.textPrimary} style={{marginRight: 4}} />}
             />
 
             {error && (
@@ -113,9 +108,11 @@ const QuestionsScreen = () => {
         ListEmptyComponent={
           !isGeneratingQuestion ? (
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📋</Text>
+              <View style={styles.emptyIconBg}>
+                <Text style={styles.emptyIcon}>📋</Text>
+              </View>
               <Text style={styles.emptyTitle}>No questions loaded</Text>
-              <Text style={styles.emptySubtitle}>Select a role above and click "Load Questions"</Text>
+              <Text style={styles.emptySubtitle}>Type a role above and tap "Load Questions" to curate a study list.</Text>
             </View>
           ) : null
         }
@@ -125,55 +122,54 @@ const QuestionsScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Colors.bgPrimary,
   },
   list: {
     padding: Spacing.lg,
+    paddingBottom: Spacing.xxl,
   },
   title: {
-    color: Colors.text,
+    color: Colors.textPrimary,
     fontSize: FontSizes.xxl,
-    fontWeight: '700',
+    fontWeight: '800',
     marginBottom: Spacing.xs,
   },
   subtitle: {
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     fontSize: FontSizes.md,
     marginBottom: Spacing.lg,
   },
-  roleGrid: {
+  
+  // Input Styling
+  inputWrapper: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.sm,
-    marginBottom: Spacing.lg,
-  },
-  roleCard: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.backgroundCard,
-    borderWidth: 1,
+    alignItems: 'center',
+    backgroundColor: Colors.bgElevated,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-  },
-  roleCardSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  roleText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-  },
-  roleTextSelected: {
-    color: Colors.text,
-  },
-  loadButton: {
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    height: 54,
     marginBottom: Spacing.lg,
   },
+  roleInput: { 
+    flex: 1, 
+    color: Colors.textPrimary, 
+    fontSize: FontSizes.md, 
+    marginLeft: Spacing.sm,
+    height: '100%' 
+  },
+
+  loadButton: {
+    marginBottom: Spacing.xl,
+  },
+  
+  // Question Card
   questionCard: {
     marginBottom: Spacing.md,
+    ...Shadows.small,
   },
   questionHeader: {
     flexDirection: 'row',
@@ -183,27 +179,28 @@ const styles = StyleSheet.create({
   },
   typeBadge: {
     paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: Radius.sm,
   },
   typeText: {
     fontSize: FontSizes.xs,
-    fontWeight: '700',
+    fontWeight: '800',
+    letterSpacing: 0.5,
   },
   questionNumber: {
     color: Colors.textMuted,
     fontSize: FontSizes.xs,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   questionText: {
-    color: Colors.text,
+    color: Colors.textPrimary,
     fontSize: FontSizes.md,
-    lineHeight: 24,
+    lineHeight: 26,
     fontWeight: '500',
     marginBottom: Spacing.sm,
   },
   pointsContainer: {
-    backgroundColor: Colors.background + '50',
+    backgroundColor: Colors.bgElevated,
     padding: Spacing.sm,
     borderRadius: Radius.sm,
     marginTop: Spacing.xs,
@@ -217,8 +214,10 @@ const styles = StyleSheet.create({
   pointText: {
     color: Colors.textSecondary,
     fontSize: FontSizes.xs,
-    lineHeight: 18,
+    lineHeight: 20,
   },
+  
+  // Error & Empty States
   errorCard: {
     marginBottom: Spacing.md,
   },
@@ -230,20 +229,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: Spacing.xxl,
   },
+  emptyIconBg: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: Colors.bgCard,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   emptyIcon: {
-    fontSize: 48,
-    marginBottom: Spacing.md,
+    fontSize: 32,
   },
   emptyTitle: {
-    color: Colors.text,
+    color: Colors.textPrimary,
     fontSize: FontSizes.lg,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: Spacing.sm,
   },
   emptySubtitle: {
-    color: Colors.textSecondary,
+    color: Colors.textMuted,
     fontSize: FontSizes.sm,
     textAlign: 'center',
+    lineHeight: 22,
+    maxWidth: '80%',
   },
 });
 

@@ -3,23 +3,38 @@ import { View, StyleSheet } from 'react-native';
 import { Colors, Spacing, Radius, Shadows } from '../../constants/theme';
 
 const Card = ({ children, style, variant = 'default', padding = 'md' }) => {
-  const getBackgroundColor = () => {
+  const getStyle = () => {
     switch (variant) {
-      case 'primary': return Colors.primary + '20';
-      case 'success': return Colors.success + '20';
-      case 'warning': return Colors.warning + '20';
-      case 'error': return Colors.error + '20';
-      default: return Colors.backgroundCard;
-    }
-  };
-
-  const getBorderColor = () => {
-    switch (variant) {
-      case 'primary': return Colors.primary + '40';
-      case 'success': return Colors.success + '40';
-      case 'warning': return Colors.warning + '40';
-      case 'error': return Colors.error + '40';
-      default: return Colors.border;
+      case 'primary':
+        return {
+          backgroundColor: Colors.primaryBg,
+          borderColor: Colors.primary + '30',
+          borderWidth: 1,
+        };
+      case 'success':
+        return {
+          backgroundColor: 'rgba(16, 185, 129, 0.08)',
+          borderColor: Colors.success + '20',
+          borderWidth: 1,
+        };
+      case 'warning':
+        return {
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          borderColor: Colors.warning + '20',
+          borderWidth: 1,
+        };
+      case 'error':
+        return {
+          backgroundColor: 'rgba(239, 68, 68, 0.08)',
+          borderColor: Colors.error + '20',
+          borderWidth: 1,
+        };
+      default:
+        return {
+          backgroundColor: Colors.bgCard,
+          borderColor: Colors.border,
+          borderWidth: 1,
+        };
     }
   };
 
@@ -36,11 +51,9 @@ const Card = ({ children, style, variant = 'default', padding = 'md' }) => {
   return (
     <View style={[
       styles.card,
-      {
-        backgroundColor: getBackgroundColor(),
-        borderColor: getBorderColor(),
-        padding: getPadding(),
-      },
+      getStyle(),
+      { padding: getPadding() },
+      Shadows.small,
       style,
     ]}>
       {children}
@@ -51,8 +64,7 @@ const Card = ({ children, style, variant = 'default', padding = 'md' }) => {
 const styles = StyleSheet.create({
   card: {
     borderRadius: Radius.lg,
-    borderWidth: 1,
-    ...Shadows.small,
+    overflow: 'hidden', // Important for glass effect
   },
 });
 

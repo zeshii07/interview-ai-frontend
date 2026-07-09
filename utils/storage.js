@@ -1,9 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
 const STORAGE_KEYS = {
   INTERVIEW_HISTORY: '@interviewai_history',
   FAVORITE_QUESTIONS: '@interviewai_favorites',
+  ONBOARDING_SEEN: '@interviewai_onboarding_seen', // NEW
 };
+
 
 // Save Interview History
 export const saveHistory = async (history) => {
@@ -51,5 +52,28 @@ export const clearAllData = async () => {
     await AsyncStorage.multiRemove([STORAGE_KEYS.INTERVIEW_HISTORY, STORAGE_KEYS.FAVORITE_QUESTIONS]);
   } catch (error) {
     console.error('Failed to clear data:', error);
+  }
+};
+
+// Add this to your STORAGE_KEYS object at the top:
+
+// ... keep your existing functions ...
+
+// ADD THESE TWO NEW FUNCTIONS AT THE VERY BOTTOM:
+
+export const checkOnboardingSeen = async () => {
+  try {
+    const value = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_SEEN);
+    return value === 'true'; // returns true or false
+  } catch (error) {
+    return false;
+  }
+};
+
+export const setOnboardingSeen = async () => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_SEEN, 'true');
+  } catch (error) {
+    console.error('Failed to save onboarding status');
   }
 };

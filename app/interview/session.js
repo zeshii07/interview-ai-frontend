@@ -1,111 +1,53 @@
 import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import LoadingOverlay from '../../components/ui/LoadingOverlay';
+import ScoreRing from '../../components/ui/ScoreRing'; // NEW IMPORT
 import useInterviewStore from '../../store/interviewStore';
 
 const InterviewSession = () => {
-  const {
-    currentRole,
-    currentDifficulty,
-    currentQuestion,
-    currentAnswer,
-    currentFeedback,
-    isGeneratingQuestion,
-    isEvaluating,
-    error,
-    setAnswer,
-    generateQuestion,
-    submitAnswer,
-    resetSession,
-    clearError,
-  } = useInterviewStore();
-
+  const { currentRole, currentDifficulty, currentQuestion, currentAnswer, currentFeedback, isGeneratingQuestion, isEvaluating, error, setAnswer, generateQuestion, submitAnswer, resetSession, clearError } = useInterviewStore();
   const [questionType, setQuestionType] = useState('behavioral');
 
-  // Generate first question on mount
-  useEffect(() => {
-    handleNewQuestion();
-  }, []);
+  useEffect(() => { handleNewQuestion(); }, []);
 
   const handleNewQuestion = async () => {
     resetSession();
-    try {
-      await generateQuestion(currentRole, currentDifficulty, questionType);
-    } catch (err) {
-      console.error('Failed to generate question:', err);
-    }
+    try { await generateQuestion(currentRole, currentDifficulty, questionType); } catch (err) {}
   };
 
   const handleSubmit = async () => {
-    try {
-      await submitAnswer();
-    } catch (err) {
-      console.error('Failed to evaluate answer:', err);
-    }
+    try { await submitAnswer(); } catch (err) {}
   };
 
   const isLoading = isGeneratingQuestion || isEvaluating;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      {isLoading && (
-        <LoadingOverlay 
-          message={isGeneratingQuestion ? 'Generating question...' : 'Analyzing your answer...'} 
-        />
-      )}
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      {isLoading && <LoadingOverlay message={isGeneratingQuestion ? 'Generating question...' : 'Analyzing your answer...'} />}
 
-      <ScrollView 
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Session Header */}
-        <View style={styles.sessionHeader}>
-          <View style={styles.badgeContainer}>
-            <View style={[styles.badge, { backgroundColor: Colors.primary + '20' }]}>
-              <Text style={[styles.badgeText, { color: Colors.primary }]}>{currentRole}</Text>
-            </View>
-            <View style={[styles.badge, { backgroundColor: Colors.warning + '20' }]}>
-              <Text style={[styles.badgeText, { color: Colors.warning }]}>{currentDifficulty}</Text>
-            </View>
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        
+        {/* Top Meta */}
+        <View style={styles.metaRow}>
+          <View style={[styles.badge, { backgroundColor: Colors.primaryBg }]}>
+            <Text style={{ color: Colors.primaryLight, fontSize: FontSizes.xs, fontWeight: '700' }}>{currentRole}</Text>
+          </View>
+          <View style={[styles.badge, { backgroundColor: Colors.bgElevated }]}>
+            <Text style={{ color: Colors.textMuted, fontSize: FontSizes.xs, fontWeight: '600' }}>{currentDifficulty.toUpperCase()}</Text>
           </View>
         </View>
 
-        {/* Question Type Selector */}
+        {/* Type Selector */}
         {!currentFeedback && (
-          <View style={styles.typeSelector}>
+          <View style={styles.typeRow}>
             {['behavioral', 'technical', 'situational'].map((type) => (
-              <TouchableOpacity
-                key={type}
-                style={[
-                  styles.typeChip,
-                  questionType === type && styles.typeChipActive,
-                ]}
-                onPress={() => setQuestionType(type)}
-              >
-                <Text style={[
-                  styles.typeChipText,
-                  questionType === type && styles.typeChipTextActive,
-                ]}>
-                  {type.charAt(0).toUpperCase() + type.slice(1)}
-                </Text>
+              <TouchableOpacity key={type} style={[styles.typeBtn, questionType === type && styles.typeBtnActive]} onPress={() => setQuestionType(type)}>
+                <Text style={[styles.typeBtnText, questionType === type && styles.typeBtnTextActive]}>{type.charAt(0).toUpperCase() + type.slice(1)}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -113,23 +55,16 @@ const InterviewSession = () => {
 
         {/* Question Card */}
         {currentQuestion && (
-          <Card style={styles.questionCard} variant="primary" padding="lg">
-            <View style={styles.questionHeader}>
-              <Ionicons name="help-circle" size={24} color={Colors.primary} />
-              <Text style={styles.questionCategory}>
-                {currentQuestion.category?.toUpperCase()}
-              </Text>
+          <Card style={styles.questionCard} padding="lg">
+            <View style={styles.qHeader}>
+              <Ionicons name="chatbubble-ellipses-outline" size={20} color={Colors.primary} />
+              <Text style={styles.qCategory}>{currentQuestion.category?.toUpperCase()}</Text>
             </View>
-            <Text style={styles.questionText}>{currentQuestion.question}</Text>
-            
+            <Text style={styles.qText}>{currentQuestion.question}</Text>
             {currentQuestion.tips && (
-              <View style={styles.tipsContainer}>
-                <Text style={styles.tipsLabel}>💡 Tips:</Text>
-                {currentQuestion.tips.map((tip, index) => (
-                  <Text key={index} style={styles.tipText}>
-                    • {tip}
-                  </Text>
-                ))}
+              <View style={styles.tipsBox}>
+                <Text style={styles.tipsTitle}>💡 Pro Tips</Text>
+                {currentQuestion.tips.map((t, i) => <Text key={i} style={styles.tipItem}>• {t}</Text>)}
               </View>
             )}
           </Card>
@@ -138,12 +73,12 @@ const InterviewSession = () => {
         {/* Answer Input */}
         {!currentFeedback && (
           <View style={styles.answerSection}>
-            <Text style={styles.answerLabel}>Your Answer</Text>
+            <Text style={styles.label}>Your Response</Text>
             <TextInput
-              style={styles.answerInput}
+              style={styles.input}
               multiline
               numberOfLines={8}
-              placeholder="Type your answer here... Use the STAR method (Situation, Task, Action, Result) for behavioral questions"
+              placeholder="Use the STAR method (Situation, Task, Action, Result) for the best results..."
               placeholderTextColor={Colors.textMuted}
               value={currentAnswer}
               onChangeText={setAnswer}
@@ -153,108 +88,66 @@ const InterviewSession = () => {
           </View>
         )}
 
-        {/* Action Buttons */}
+        {/* Actions */}
         {!currentFeedback ? (
-          <View style={styles.actionsContainer}>
-            <Button
-              title="Skip Question"
-              onPress={handleNewQuestion}
-              variant="ghost"
-              icon={<Ionicons name="refresh" size={18} color={Colors.primaryLight} />}
-            />
-            <Button
-              title="Submit Answer"
-              onPress={handleSubmit}
-              disabled={currentAnswer.length < 20 || isLoading}
-              loading={isEvaluating}
-              fullWidth
-              size="large"
-            />
+          <View style={styles.actions}>
+            <Button title="Skip" onPress={handleNewQuestion} variant="ghost" icon={<Ionicons name="refresh" size={18} color={Colors.textMuted} />} />
+            <Button title="Submit Answer" onPress={handleSubmit} disabled={currentAnswer.length < 20 || isLoading} loading={isEvaluating} fullWidth size="large" />
           </View>
         ) : (
-          <View style={styles.actionsContainer}>
-            <Button
-              title="Next Question"
-              onPress={handleNewQuestion}
-              fullWidth
-              size="large"
-              icon={<Ionicons name="arrow-forward" size={18} color={Colors.text} />}
-            />
-          </View>
+          <Button title="Next Question" onPress={handleNewQuestion} fullWidth size="large" icon={<Ionicons name="arrow-forward" size={18} color={Colors.textPrimary} style={{marginRight: 4}} />} />
         )}
 
-        {/* Feedback Section */}
+        {/* Feedback UI */}
         {currentFeedback && (
-          <View style={styles.feedbackSection}>
-            <Text style={styles.feedbackTitle}>📊 Your Feedback</Text>
+          <View style={styles.feedbackContainer}>
+            <Text style={styles.feedbackTitle}>Performance Review</Text>
             
-            {/* Rating */}
-            <Card style={styles.ratingCard} variant="primary">
-              <View style={styles.ratingContainer}>
-                <Text style={styles.ratingNumber}>{currentFeedback.rating}</Text>
-                <Text style={styles.ratingMax}>/ {currentFeedback.rating_max}</Text>
-              </View>
-              <Text style={styles.ratingLabel}>Overall Score</Text>
-            </Card>
-
-            {/* Score Breakdown */}
-            <View style={styles.scoreBreakdown}>
-              <ScoreBar label="Structure" score={currentFeedback.structure_score} color={Colors.primary} />
-              <ScoreBar label="Content" score={currentFeedback.content_score} color={Colors.secondary} />
-              <ScoreBar label="Communication" score={currentFeedback.communication_score} color={Colors.success} />
+            {/* Score Ring Centered */}
+            <View style={styles.scoreCenter}>
+              <ScoreRing score={currentFeedback.rating} maxScore={currentFeedback.rating_max} size={140} />
+              <Text style={styles.scoreLabel}>Overall Score</Text>
             </View>
 
-            {/* Overall Feedback */}
-            <Card style={styles.feedbackCard}>
-              <Text style={styles.feedbackCardTitle}>Overall Feedback</Text>
-              <Text style={styles.feedbackText}>{currentFeedback.overall_feedback}</Text>
+            {/* Metrics */}
+            <View style={styles.metricsRow}>
+              <Metric label="Structure" score={currentFeedback.structure_score} color={Colors.primary} />
+              <Metric label="Content" score={currentFeedback.content_score} color={Colors.secondary} />
+              <Metric label="Clarity" score={currentFeedback.communication_score} color={Colors.success} />
+            </View>
+
+            {/* Feedback Cards */}
+            <Card style={styles.fbCard} padding="md">
+              <Text style={styles.fbCardTitle}>General Feedback</Text>
+              <Text style={styles.fbText}>{currentFeedback.overall_feedback}</Text>
             </Card>
 
-            {/* Strengths */}
             {currentFeedback.strengths?.length > 0 && (
-              <Card style={styles.feedbackCard} variant="success">
-                <Text style={styles.feedbackCardTitle}>✅ Strengths</Text>
-                {currentFeedback.strengths.map((strength, index) => (
-                  <Text key={index} style={styles.feedbackListItem}>• {strength}</Text>
-                ))}
+              <Card style={styles.fbCard} variant="success" padding="md">
+                <Text style={styles.fbCardTitle}>✅ Strengths</Text>
+                {currentFeedback.strengths.map((s, i) => <Text key={i} style={styles.fbListItem}>• {s}</Text>)}
               </Card>
             )}
 
-            {/* Improvements */}
             {currentFeedback.improvements?.length > 0 && (
-              <Card style={styles.feedbackCard} variant="warning">
-                <Text style={styles.feedbackCardTitle}>📈 Improvements</Text>
-                {currentFeedback.improvements.map((item, index) => (
-                  <Text key={index} style={styles.feedbackListItem}>• {item}</Text>
-                ))}
+              <Card style={styles.fbCard} variant="warning" padding="md">
+                <Text style={styles.fbCardTitle}>📈 Areas to Improve</Text>
+                {currentFeedback.improvements.map((s, i) => <Text key={i} style={styles.fbListItem}>• {s}</Text>)}
               </Card>
             )}
 
-            {/* Sample Answer */}
             {currentFeedback.sample_answer && (
-              <Card style={styles.feedbackCard}>
-                <Text style={styles.feedbackCardTitle}>💡 Sample Strong Answer</Text>
-                <Text style={styles.sampleAnswer}>{currentFeedback.sample_answer}</Text>
-              </Card>
-            )}
-
-            {/* Follow-up Question */}
-            {currentFeedback.follow_up_question && (
-              <Card style={styles.feedbackCard} variant="primary">
-                <Text style={styles.feedbackCardTitle}>🤔 Follow-up Question</Text>
-                <Text style={styles.feedbackText}>{currentFeedback.follow_up_question}</Text>
+              <Card style={styles.fbCard} padding="md">
+                <Text style={styles.fbCardTitle}>💡 Ideal Answer Example</Text>
+                <Text style={[styles.fbText, { fontStyle: 'italic', color: Colors.textMuted }]}>{currentFeedback.sample_answer}</Text>
               </Card>
             )}
           </View>
         )}
 
-        {/* Error Message */}
         {error && (
-          <Card style={styles.errorCard} variant="error">
-            <Text style={styles.errorText}>❌ {error}</Text>
-            <TouchableOpacity onPress={clearError}>
-              <Text style={styles.dismissText}>Dismiss</Text>
-            </TouchableOpacity>
+          <Card style={{ marginTop: Spacing.md }} variant="error" padding="sm">
+            <Text style={{ color: Colors.error, fontSize: FontSizes.sm }}>{error}</Text>
           </Card>
         )}
 
@@ -264,245 +157,57 @@ const InterviewSession = () => {
   );
 };
 
-// Score Bar Component
-const ScoreBar = ({ label, score, color }) => (
-  <View style={styles.scoreBarContainer}>
-    <Text style={styles.scoreBarLabel}>{label}</Text>
-    <View style={styles.scoreBarTrack}>
-      <View 
-        style={[styles.scoreBarFill, { width: `${score * 10}%`, backgroundColor: color }]} 
-      />
-    </View>
-    <Text style={[styles.scoreBarValue, { color }]}>{score}/10</Text>
+// Mini Metric Component
+const Metric = ({ label, score, color }) => (
+  <View style={styles.metricBox}>
+    <Text style={[styles.metricScore, { color }]}>{score}</Text>
+    <Text style={styles.metricLabel}>{label}</Text>
   </View>
 );
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: Spacing.lg,
-  },
-  sessionHeader: {
-    marginBottom: Spacing.md,
-  },
-  badgeContainer: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-  },
-  badge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderRadius: Radius.full,
-  },
-  badgeText: {
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  typeChip: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.backgroundCard,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  typeChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  typeChipText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: '500',
-  },
-  typeChipTextActive: {
-    color: Colors.text,
-  },
-  questionCard: {
-    marginBottom: Spacing.lg,
-  },
-  questionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    marginBottom: Spacing.md,
-  },
-  questionCategory: {
-    color: Colors.primary,
-    fontSize: FontSizes.xs,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  questionText: {
-    color: Colors.text,
-    fontSize: FontSizes.lg,
-    lineHeight: 26,
-    fontWeight: '500',
-  },
-  tipsContainer: {
-    marginTop: Spacing.md,
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  tipsLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-    marginBottom: Spacing.xs,
-  },
-  tipText: {
-    color: Colors.textMuted,
-    fontSize: FontSizes.xs,
-    lineHeight: 18,
-  },
-  answerSection: {
-    marginBottom: Spacing.lg,
-  },
-  answerLabel: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    marginBottom: Spacing.sm,
-  },
-  answerInput: {
-    backgroundColor: Colors.backgroundCard,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    padding: Spacing.md,
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    lineHeight: 24,
-    textAlignVertical: 'top',
-    minHeight: 150,
-  },
-  charCount: {
-    color: Colors.textMuted,
-    fontSize: FontSizes.xs,
-    textAlign: 'right',
-    marginTop: Spacing.xs,
-  },
-  actionsContainer: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.xl,
-  },
-  feedbackSection: {
-    gap: Spacing.md,
-  },
-  feedbackTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-    marginBottom: Spacing.sm,
-  },
-  ratingCard: {
-    alignItems: 'center',
-    padding: Spacing.xl,
-  },
-  ratingContainer: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-  },
-  ratingNumber: {
-    color: Colors.primary,
-    fontSize: 48,
-    fontWeight: '800',
-  },
-  ratingMax: {
-    color: Colors.textMuted,
-    fontSize: FontSizes.lg,
-    marginBottom: 8,
-  },
-  ratingLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    marginTop: Spacing.xs,
-  },
-  scoreBreakdown: {
-    gap: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  scoreBarContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-  },
-  scoreBarLabel: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    width: 90,
-  },
-  scoreBarTrack: {
-    flex: 1,
-    height: 8,
-    backgroundColor: Colors.background,
-    borderRadius: Radius.full,
-    overflow: 'hidden',
-  },
-  scoreBarFill: {
-    height: '100%',
-    borderRadius: Radius.full,
-  },
-  scoreBarValue: {
-    fontSize: FontSizes.sm,
-    fontWeight: '600',
-    width: 40,
-    textAlign: 'right',
-  },
-  feedbackCard: {
-    marginBottom: Spacing.sm,
-  },
-  feedbackCardTitle: {
-    color: Colors.text,
-    fontSize: FontSizes.md,
-    fontWeight: '700',
-    marginBottom: Spacing.sm,
-  },
-  feedbackText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    lineHeight: 22,
-  },
-  feedbackListItem: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    lineHeight: 22,
-    marginBottom: Spacing.xs,
-  },
-  sampleAnswer: {
-    color: Colors.textMuted,
-    fontSize: FontSizes.sm,
-    lineHeight: 22,
-    fontStyle: 'italic',
-  },
-  errorCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: Spacing.md,
-  },
-  errorText: {
-    color: Colors.error,
-    fontSize: FontSizes.sm,
-    flex: 1,
-  },
-  dismissText: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.sm,
-    marginLeft: Spacing.md,
-  },
+  screen: { flex: 1, backgroundColor: Colors.bgPrimary },
+  scrollView: { flex: 1 },
+  content: { padding: Spacing.lg, paddingTop: Spacing.md },
+  
+  metaRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.md },
+  badge: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: Radius.full },
+  
+  typeRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  typeBtn: { flex: 1, paddingVertical: Spacing.sm, borderRadius: Radius.md, backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, alignItems: 'center' },
+  typeBtnActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  typeBtnText: { color: Colors.textMuted, fontSize: FontSizes.sm, fontWeight: '600' },
+  typeBtnTextActive: { color: Colors.textPrimary },
+
+  questionCard: { marginBottom: Spacing.xl, ...Shadows.medium },
+  qHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, marginBottom: Spacing.md },
+  qCategory: { color: Colors.primary, fontSize: FontSizes.xs, fontWeight: '800', letterSpacing: 1 },
+  qText: { color: Colors.textPrimary, fontSize: FontSizes.lg, lineHeight: 28, fontWeight: '500' },
+  tipsBox: { marginTop: Spacing.lg, paddingTop: Spacing.lg, borderTopWidth: 1, borderTopColor: Colors.border },
+  tipsTitle: { color: Colors.textSecondary, fontSize: FontSizes.sm, fontWeight: '700', marginBottom: Spacing.sm },
+  tipItem: { color: Colors.textMuted, fontSize: FontSizes.xs, lineHeight: 20, marginBottom: 2 },
+
+  answerSection: { marginBottom: Spacing.lg },
+  label: { color: Colors.textPrimary, fontSize: FontSizes.md, fontWeight: '700', marginBottom: Spacing.sm },
+  input: { backgroundColor: Colors.bgCard, borderWidth: 1, borderColor: Colors.border, borderRadius: Radius.lg, padding: Spacing.md, color: Colors.textPrimary, fontSize: FontSizes.md, lineHeight: 24, textAlignVertical: 'top', minHeight: 160 },
+  charCount: { color: Colors.textMuted, fontSize: FontSizes.xs, textAlign: 'right', marginTop: Spacing.xs },
+
+  actions: { gap: Spacing.sm, marginBottom: Spacing.xl },
+
+  feedbackContainer: { gap: Spacing.lg, marginTop: Spacing.sm },
+  feedbackTitle: { color: Colors.textPrimary, fontSize: FontSizes.xl, fontWeight: '800', textAlign: 'center' },
+  scoreCenter: { alignItems: 'center', marginVertical: Spacing.md },
+  scoreLabel: { color: Colors.textMuted, fontSize: FontSizes.sm, marginTop: Spacing.sm, fontWeight: '500' },
+  
+  metricsRow: { flexDirection: 'row', backgroundColor: Colors.bgCard, borderRadius: Radius.lg, borderWidth: 1, borderColor: Colors.border, padding: Spacing.lg, justifyContent: 'space-around' },
+  metricBox: { alignItems: 'center' },
+  metricScore: { fontSize: FontSizes.xxl, fontWeight: '800' },
+  metricLabel: { color: Colors.textMuted, fontSize: FontSizes.xs, marginTop: 4, fontWeight: '600' },
+
+  fbCard: { marginBottom: Spacing.sm },
+  fbCardTitle: { color: Colors.textPrimary, fontSize: FontSizes.md, fontWeight: '700', marginBottom: Spacing.sm },
+  fbText: { color: Colors.textSecondary, fontSize: FontSizes.sm, lineHeight: 22 },
+  fbListItem: { color: Colors.textSecondary, fontSize: FontSizes.sm, lineHeight: 22, marginBottom: 4 },
 });
 
 export default InterviewSession;
