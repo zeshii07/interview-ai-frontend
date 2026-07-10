@@ -1,9 +1,6 @@
-// Change this to your computer's IP when testing on physical device
-// Use 'http://localhost:5000' for emulator
-// Use 'http://YOUR_IP:5000' for physical device
-export const API_BASE_URL = __DEV__ 
-  ? 'interview-i-backend-production.up.railway.app'  // Changed to match your browser!
-  : 'https://your-production-url.com';
+// Always use the live Railway URL for both development and production
+// so that the app works when you build the APK
+export const API_BASE_URL = 'https://interview-i-backend-production.up.railway.app';
 
 export const ROLES = [
   'Frontend Developer',

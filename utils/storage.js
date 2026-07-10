@@ -1,24 +1,23 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-const STORAGE_KEYS = {
+
+// All keys explicitly defined as strings
+const KEYS = {
   HISTORY: '@hirely_history',
   FAVORITES: '@hirely_favorites',
-  ONBOARDING_SEEN: '@hirely_onboarding_seen',
+  ONBOARDING: '@hirely_onboarding_seen',
 };
 
-
-// Save Interview History
 export const saveHistory = async (history) => {
   try {
-    await AsyncStorage.setItem(STORAGE_KEYS.INTERVIEW_HISTORY, JSON.stringify(history));
+    await AsyncStorage.setItem(KEYS.HISTORY, JSON.stringify(history));
   } catch (error) {
     console.error('Failed to save history:', error);
   }
 };
 
-// Load Interview History
 export const loadHistory = async () => {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.INTERVIEW_HISTORY);
+    const data = await AsyncStorage.getItem(KEYS.HISTORY);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error('Failed to load history:', error);
@@ -26,19 +25,17 @@ export const loadHistory = async () => {
   }
 };
 
-// Save Favorite Questions
 export const saveFavorites = async (favorites) => {
   try {
-    await AsyncStorage.setItem(STORAGE_KEYS.FAVORITE_QUESTIONS, JSON.stringify(favorites));
+    await AsyncStorage.setItem(KEYS.FAVORITES, JSON.stringify(favorites));
   } catch (error) {
     console.error('Failed to save favorites:', error);
   }
 };
 
-// Load Favorite Questions
 export const loadFavorites = async () => {
   try {
-    const data = await AsyncStorage.getItem(STORAGE_KEYS.FAVORITE_QUESTIONS);
+    const data = await AsyncStorage.getItem(KEYS.FAVORITES);
     return data ? JSON.parse(data) : [];
   } catch (error) {
     console.error('Failed to load favorites:', error);
@@ -46,25 +43,10 @@ export const loadFavorites = async () => {
   }
 };
 
-// Clear All Data
-export const clearAllData = async () => {
-  try {
-    await AsyncStorage.multiRemove([STORAGE_KEYS.INTERVIEW_HISTORY, STORAGE_KEYS.FAVORITE_QUESTIONS]);
-  } catch (error) {
-    console.error('Failed to clear data:', error);
-  }
-};
-
-// Add this to your STORAGE_KEYS object at the top:
-
-// ... keep your existing functions ...
-
-// ADD THESE TWO NEW FUNCTIONS AT THE VERY BOTTOM:
-
 export const checkOnboardingSeen = async () => {
   try {
-    const value = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_SEEN);
-    return value === 'true'; // returns true or false
+    const value = await AsyncStorage.getItem(KEYS.ONBOARDING);
+    return value === 'true';
   } catch (error) {
     return false;
   }
@@ -72,8 +54,16 @@ export const checkOnboardingSeen = async () => {
 
 export const setOnboardingSeen = async () => {
   try {
-    await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_SEEN, 'true');
+    await AsyncStorage.setItem(KEYS.ONBOARDING, 'true');
   } catch (error) {
     console.error('Failed to save onboarding status');
+  }
+};
+
+export const clearAllData = async () => {
+  try {
+    await AsyncStorage.multiRemove([KEYS.HISTORY, KEYS.FAVORITES, KEYS.ONBOARDING]);
+  } catch (error) {
+    console.error('Failed to clear data');
   }
 };

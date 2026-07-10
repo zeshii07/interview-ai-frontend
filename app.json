@@ -12,7 +12,12 @@
         "backgroundColor": "#0B0D17",
         "foregroundImage": "./assets/icon.png"
       },
-      "package": "com.zeeshii_07.hirely"
+      "splash": {
+        "image": "./assets/icon.png",
+        "resizeMode": "contain",
+        "backgroundColor": "#0B0D17"
+      },
+      "permissions": ["RECORD_AUDIO"]
     },
     "plugins": [
       "expo-router",
@@ -25,13 +30,13 @@
             "usesCleartextTraffic": true
           }
         }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": false
+        }
       ]
-    ],
-    "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "e5c4c5ab-26db-4ce1-82ec-484f584ffe11"
-      }
-    }
+    ]
   }
 }
