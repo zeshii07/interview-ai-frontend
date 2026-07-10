@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 const STORAGE_KEYS = {
-  INTERVIEW_HISTORY: '@interviewai_history',
-  FAVORITE_QUESTIONS: '@interviewai_favorites',
-  ONBOARDING_SEEN: '@interviewai_onboarding_seen', // NEW
+  HISTORY: '@hirely_history',
+  FAVORITES: '@hirely_favorites',
+  ONBOARDING_SEEN: '@hirely_onboarding_seen',
 };
 
 

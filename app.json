@@ -1,18 +1,37 @@
 {
   "expo": {
-    "name": "InterviewAI",
-    "slug": "interview-ai",
+    "name": "Hirely",
+    "slug": "hirely",
     "version": "1.0.0",
     "orientation": "portrait",
-    "scheme": "interviewai",
+    "scheme": "hirely",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "icon": "./assets/icon.png",
     "android": {
-      "usesCleartextTraffic": true
+      "adaptiveIcon": {
+        "backgroundColor": "#0B0D17",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "package": "com.zeeshii_07.hirely"
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
-    ]
+      "expo-secure-store",
+      "expo-splash-screen",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e5c4c5ab-26db-4ce1-82ec-484f584ffe11"
+      }
+    }
   }
 }
