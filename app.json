@@ -12,17 +12,24 @@
         "backgroundColor": "#0B0D17",
         "foregroundImage": "./assets/icon.png"
       },
-      "splash": {
-        "image": "./assets/icon.png",
-        "resizeMode": "contain",
-        "backgroundColor": "#0B0D17"
-      },
-      "permissions": ["RECORD_AUDIO"]
+      "permissions": [
+        "RECORD_AUDIO"
+      ],
+      "package": "com.zeeshii_07.hirely"
     },
     "plugins": [
       "expo-router",
       "expo-secure-store",
       "expo-splash-screen",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Hirely to access your microphone for interview answers.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ],
       [
         "expo-build-properties",
         {
@@ -31,12 +38,13 @@
           }
         }
       ],
-      [
-        "expo-image-picker",
-        {
-          "photosPermission": false
-        }
-      ]
-    ]
+      "expo-asset"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e5c4c5ab-26db-4ce1-82ec-484f584ffe11"
+      }
+    }
   }
 }

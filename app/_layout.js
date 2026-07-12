@@ -1,227 +1,219 @@
-// import { useState, useEffect } from 'react';
-// import { Stack } from 'expo-router';
-// import { StatusBar } from 'expo-status-bar';
-// import { View, ActivityIndicator } from 'react-native';
-// import { useFonts } from 'expo-font';
-// import * as SplashScreen from 'expo-splash-screen';
-// import { Colors } from '../constants/theme';
-// import { checkOnboardingSeen } from '../utils/storage';
-// import OnboardingScreen from './(auth)/onboarding';
-
-// // Keep the native splash screen visible while we load assets
-// SplashScreen.preventAutoHideAsync();
-
-// export default function RootLayout() {
-//   const [appIsReady, setAppIsReady] = useState(false);
-//   const [showOnboarding, setShowOnboarding] = useState(false);
-
-//   // 1. EXPLICITLY load the Ionicons font
-//   const [fontsLoaded, fontError] = useFonts({
-//     Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
-//   });
-
-//   // 2. Once font is loaded (or fails), check storage
-//   useEffect(() => {
-//     async function prepare() {
-//       try {
-//         // Check if user saw onboarding
-//         const seen = await checkOnboardingSeen();
-//         setShowOnboarding(!seen);
-//       } catch (e) {
-//         console.warn('Storage error:', e);
-//       } finally {
-//         // Tell the app we are completely ready to render UI
-//         setAppIsReady(true);
-//       }
-//     }
-
-//     // Only prepare if the font is loaded (or if it failed to load, we proceed anyway so it doesn't hang forever)
-//     if (fontsLoaded || fontError) {
-//       prepare();
-//     }
-//   }, [fontsLoaded, fontError]);
-
-//   // 3. Hide the splash screen once we are ready
-//   useEffect(() => {
-//     if (appIsReady) {
-//       SplashScreen.hideAsync();
-//     }
-//   }, [appIsReady]);
-
-//   // 4. Show a simple dark loader while preparing
-//   if (!fontsLoaded && !fontError) {
-//     return (
-//       <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
-//         <ActivityIndicator size="large" color={Colors.primary} />
-//       </View>
-//     );
-//   }
-
-//   if (!appIsReady) {
-//     return (
-//       <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
-//         <ActivityIndicator size="large" color={Colors.primary} />
-//       </View>
-//     );
-//   }
-
-//   // --- RENDER APP ---
-
-//   // Show Onboarding if not seen
-//   if (showOnboarding) {
-//     return (
-//       <>
-//         <StatusBar style="light" backgroundColor={Colors.bgPrimary} />
-//         <OnboardingScreen />
-//       </>
-//     );
-//   }
-
-//   // Show Main App
-//   return (
-//     <>
-//       <StatusBar style="light" backgroundColor={Colors.bgPrimary} />
-//       <Stack
-//         screenOptions={{
-//           headerStyle: {
-//             backgroundColor: Colors.bgPrimary,
-//           },
-//           headerTintColor: Colors.textPrimary,
-//           headerShadowVisible: false,
-//           contentStyle: {
-//             backgroundColor: Colors.bgPrimary,
-//           },
-//         }}
-//       >
-//         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-//         <Stack.Screen 
-//           name="interview/session" 
-//           options={{ 
-//             title: 'Interview Session',
-//             headerBackTitle: 'Back',
-//           }} 
-//         />
-//         <Stack.Screen 
-//           name="resume/analyze" 
-//           options={{ 
-//             title: 'Resume Analyzer',
-//             headerBackTitle: 'Back',
-//           }} 
-//         />
-//       </Stack>
-//     </>
-//   );
-// }
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { View, ActivityIndicator } from 'react-native';
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { Ionicons } from '@expo/vector-icons';
+
 import { Colors } from '../constants/theme';
 import { onAuthChange } from '../services/authService';
 import { checkOnboardingSeen } from '../utils/storage';
+
 import LoginScreen from './(auth)/login';
 import OnboardingScreen from './(auth)/onboarding';
 
-SplashScreen.preventAutoHideAsync();
+SplashScreen.preventAutoHideAsync().catch((error) => {
+  console.warn('Could not prevent splash auto-hide:', error);
+});
 
 export default function RootLayout() {
-  const [appIsReady, setAppIsReady] = useState(false);
-  const [showOnboarding, setShowOnboarding] = useState(false);
-  const [user, setUser] = useState(null); // NULL = not logged in
+  const [fontsLoaded, fontError] = useFonts(Ionicons.font);
 
-  const [fontsLoaded, fontError] = useFonts({
-    Ionicons: require('@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf'),
-  });
+  const [storageReady, setStorageReady] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [user, setUser] = useState(null);
+  const [startupError, setStartupError] = useState(null);
 
   useEffect(() => {
-    async function prepare() {
+    let mounted = true;
+
+    const loadStoredState = async () => {
       try {
         const seen = await checkOnboardingSeen();
-        setShowOnboarding(!seen);
-      } catch (e) {
-        console.warn(e);
+
+        if (mounted) {
+          setShowOnboarding(!seen);
+        }
+      } catch (error) {
+        console.error('Failed to load onboarding state:', error);
+
+        if (mounted) {
+          // Do not crash the whole application because storage failed.
+          setShowOnboarding(false);
+          setStartupError('Some saved settings could not be loaded.');
+        }
       } finally {
-        setAppIsReady(true);
+        if (mounted) {
+          setStorageReady(true);
+        }
       }
-    }
+    };
 
-    if (fontsLoaded || fontError) {
-      prepare();
-    }
-  }, [fontsLoaded, fontError]);
+    loadStoredState();
 
-  // LISTEN FOR FIREBASE AUTH CHANGES
-  useEffect(() => {
-    const unsubscribe = onAuthChange((currentUser) => {
-      setUser(currentUser); // Updates state if user logs in or out
-    });
-    return unsubscribe; // Cleanup on unmount
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   useEffect(() => {
-    if (appIsReady) {
-      SplashScreen.hideAsync();
-    }
-  }, [appIsReady]);
+    let unsubscribe;
 
-  // Loading State
-  if (!fontsLoaded && !fontError) {
-    return (
-      <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
-      </View>
-    );
-  }
+    try {
+      unsubscribe = onAuthChange((currentUser) => {
+        setUser(currentUser);
+        setAuthReady(true);
+      });
+    } catch (error) {
+      console.error('Firebase authentication initialization failed:', error);
+      setStartupError('Authentication could not be initialized.');
+      setAuthReady(true);
+    }
+
+    // Prevent permanent splash screen if Firebase does not respond.
+    const fallbackTimer = setTimeout(() => {
+      setAuthReady(true);
+    }, 8000);
+
+    return () => {
+      clearTimeout(fallbackTimer);
+
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
+    };
+  }, []);
+
+  const fontReady = fontsLoaded || Boolean(fontError);
+  const appIsReady = fontReady && storageReady && authReady;
+
+  useEffect(() => {
+    if (!appIsReady) {
+      return;
+    }
+
+    SplashScreen.hideAsync().catch((error) => {
+      console.warn('Could not hide splash screen:', error);
+    });
+  }, [appIsReady]);
 
   if (!appIsReady) {
     return (
-      <View style={{ flex: 1, backgroundColor: Colors.bgPrimary, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color={Colors.primary} />
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator
+          size="large"
+          color={Colors.primary}
+        />
+
+        <Text style={styles.loadingText}>
+          Starting Hirely…
+        </Text>
       </View>
     );
   }
 
-  // --- ROUTING LOGIC ---
-
-  // 1. Show Onboarding if not seen
   if (showOnboarding) {
     return (
       <>
-        <StatusBar style="light" backgroundColor={Colors.bgPrimary} />
+        <StatusBar
+          style="light"
+          backgroundColor={Colors.bgPrimary}
+        />
         <OnboardingScreen />
       </>
     );
   }
 
-  // 2. Show Login if NO USER is found in Firebase
   if (!user) {
     return (
       <>
-        <StatusBar style="light" backgroundColor={Colors.bgPrimary} />
+        <StatusBar
+          style="light"
+          backgroundColor={Colors.bgPrimary}
+        />
+
+        {startupError ? (
+          <Text style={styles.errorText}>
+            {startupError}
+          </Text>
+        ) : null}
+
         <LoginScreen />
       </>
     );
   }
 
-  // 3. Show Main App if USER IS logged in
   return (
     <>
-      <StatusBar style="light" backgroundColor={Colors.bgPrimary} />
+      <StatusBar
+        style="light"
+        backgroundColor={Colors.bgPrimary}
+      />
+
       <Stack
         screenOptions={{
-          headerStyle: { backgroundColor: Colors.bgPrimary },
+          headerStyle: {
+            backgroundColor: Colors.bgPrimary,
+          },
           headerTintColor: Colors.textPrimary,
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: Colors.bgPrimary },
+          contentStyle: {
+            backgroundColor: Colors.bgPrimary,
+          },
         }}
       >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="interview/session" options={{ title: 'Session', headerBackTitle: 'Back' }} />
-        <Stack.Screen name="resume/analyze" options={{ title: 'Resume AI', headerBackTitle: 'Back' }} />
+        <Stack.Screen
+          name="(tabs)"
+          options={{
+            headerShown: false,
+          }}
+        />
+
+        <Stack.Screen
+          name="interview/session"
+          options={{
+            title: 'Session',
+          }}
+        />
+
+        <Stack.Screen
+          name="resume/analyze"
+          options={{
+            title: 'Resume AI',
+          }}
+        />
       </Stack>
     </>
   );
 }
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.bgPrimary,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    color: Colors.textSecondary,
+    fontSize: 14,
+  },
+
+  errorText: {
+    color: Colors.error,
+    backgroundColor: Colors.bgPrimary,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    textAlign: 'center',
+  },
+});

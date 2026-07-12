@@ -1,66 +1,206 @@
-import { useState, useEffect } from 'react';
-import Voice from '@react-native-voice/voice';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
+import {
+  AudioModule,
+  RecordingPresets,
+  setAudioModeAsync,
+  useAudioRecorder,
+  useAudioRecorderState,
+} from 'expo-audio';
+
+import { interviewAPI } from '../services/api';
 
 export const useVoiceRecognition = () => {
+  const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorderState = useAudioRecorderState(audioRecorder);
+
   const [isListening, setIsListening] = useState(false);
-  const [partialText, setPartialText] = useState('');
-  const [isSupported, setIsSupported] = useState(true); // NEW: Track if mic is available
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [hasPermission, setHasPermission] = useState(false);
+
+  const timeoutRef = useRef(null);
+  const stoppingRef = useRef(false);
 
   useEffect(() => {
-    // SAFETY CHECK: If Voice is null (like in Expo Go), don't attach listeners
-    if (!Voice) {
-      setIsSupported(false);
-      return; 
-    }
+    let mounted = true;
 
-    Voice.onSpeechStart = () => setIsListening(true);
-    Voice.onSpeechEnd = () => setIsListening(false);
-    Voice.onSpeechError = () => setIsListening(false);
-    Voice.onSpeechPartialResults = (e) => {
-      if (e.value) setPartialText(e.value[0]);
+    const configureAudio = async () => {
+      try {
+        const permission =
+          await AudioModule.requestRecordingPermissionsAsync();
+
+        if (!mounted) {
+          return;
+        }
+
+        setHasPermission(permission.granted);
+
+        if (!permission.granted) {
+          Alert.alert(
+            'Microphone permission required',
+            'Hirely needs microphone permission to record your interview answer.'
+          );
+          return;
+        }
+
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+        });
+      } catch (error) {
+        console.error('Audio initialization failed:', error);
+
+        if (mounted) {
+          setHasPermission(false);
+        }
+      }
     };
 
+    configureAudio();
+
     return () => {
-      if (Voice) {
-        Voice.destroy().then(Voice.removeAllListeners);
+      mounted = false;
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
       }
     };
   }, []);
 
-  const startListening = async (currentText, onResult) => {
-    // Prevent crash if testing in Expo Go
-    if (!isSupported) return; 
+  const stopListening = useCallback(
+    async (currentText = '', onResult = () => {}) => {
+      if (stoppingRef.current) {
+        return;
+      }
 
-    try {
-      setPartialText('');
-      await Voice.start('en-US');
-      
-      Voice.onSpeechResults = (e) => {
-        setIsListening(false);
-        if (e.value) {
-          const newText = currentText + ' ' + e.value[0];
-          onResult(newText.trim());
+      if (!isListening && !recorderState.isRecording) {
+        return;
+      }
+
+      stoppingRef.current = true;
+
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
+
+      setIsListening(false);
+      setIsTranscribing(true);
+
+      try {
+        await audioRecorder.stop();
+
+        const uri = audioRecorder.uri;
+
+        if (!uri) {
+          throw new Error('The audio recorder did not return a file URI.');
         }
-      };
-    } catch (e) {
-      setIsListening(false);
-    }
-  };
 
-  const stopListening = async () => {
-    if (!isSupported) return;
-    try {
-      await Voice.stop();
-      setIsListening(false);
-    } catch (e) {
-      setIsListening(false);
-    }
-  };
+        const response = await interviewAPI.transcribeAudio(uri);
+
+        if (!response?.success) {
+          throw new Error(
+            response?.message || 'The transcription request failed.'
+          );
+        }
+
+        const transcript =
+          typeof response.data === 'string'
+            ? response.data
+            : response.data?.text;
+
+        if (!transcript) {
+          throw new Error('The backend returned an empty transcript.');
+        }
+
+        const finalText = currentText
+          ? `${currentText} ${transcript}`.trim()
+          : transcript.trim();
+
+        onResult(finalText);
+      } catch (error) {
+        console.error('Transcription failed:', error);
+
+        Alert.alert(
+          'Transcription failed',
+          error?.message || 'Failed to process audio. Please try again.'
+        );
+      } finally {
+        stoppingRef.current = false;
+        setIsTranscribing(false);
+      }
+    },
+    [
+      audioRecorder,
+      isListening,
+      recorderState.isRecording,
+    ]
+  );
+
+  const startListening = useCallback(
+    async (currentText = '', onResult = () => {}) => {
+      if (isListening || recorderState.isRecording || isTranscribing) {
+        return;
+      }
+
+      try {
+        let permissionGranted = hasPermission;
+
+        if (!permissionGranted) {
+          const permission =
+            await AudioModule.requestRecordingPermissionsAsync();
+
+          permissionGranted = permission.granted;
+          setHasPermission(permissionGranted);
+        }
+
+        if (!permissionGranted) {
+          Alert.alert(
+            'Microphone permission required',
+            'Enable microphone access in your phone settings and try again.'
+          );
+          return;
+        }
+
+        await setAudioModeAsync({
+          allowsRecording: true,
+          playsInSilentMode: true,
+        });
+
+        await audioRecorder.prepareToRecordAsync();
+        audioRecorder.record();
+
+        setIsListening(true);
+
+        timeoutRef.current = setTimeout(() => {
+          stopListening(currentText, onResult);
+        }, 60000);
+      } catch (error) {
+        console.error('Failed to start recording:', error);
+        setIsListening(false);
+
+        Alert.alert(
+          'Recording failed',
+          error?.message || 'Unable to start microphone recording.'
+        );
+      }
+    },
+    [
+      audioRecorder,
+      hasPermission,
+      isListening,
+      isTranscribing,
+      recorderState.isRecording,
+      stopListening,
+    ]
+  );
 
   return {
     isListening,
-    isSupported, // Expose this so we can show a warning if not supported
-    partialText,
+    isTranscribing,
+    hasPermission,
+    recorderState,
     startListening,
     stopListening,
   };
