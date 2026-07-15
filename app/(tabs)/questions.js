@@ -271,7 +271,7 @@ import {
   TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Gradients, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import LoadingOverlay from '../../components/ui/LoadingOverlay';
@@ -391,7 +391,7 @@ const QuestionsScreen = () => {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: Colors.bgPrimary,
+    ...Gradients.screen,
   },
   list: {
     padding: Spacing.lg,

@@ -1,181 +1,178 @@
-// import React from 'react';
-// import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-// import { Colors, Spacing, Radius, FontSizes, Shadows } from '../../constants/theme';
-
-// const Button = ({ 
-//   title, 
-//   onPress, 
-//   variant = 'primary', 
-//   size = 'medium',
-//   disabled = false, 
-//   loading = false,
-//   icon,
-//   fullWidth = false,
-//   style,
-// }) => {
-//   const getStyle = () => {
-//     if (disabled) return { backgroundColor: Colors.bgElevated };
-//     switch (variant) {
-//       case 'primary': return { backgroundColor: Colors.primary };
-//       case 'secondary': return { backgroundColor: Colors.secondary };
-//       case 'outline': return { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: Colors.borderLight };
-//       case 'ghost': return { backgroundColor: 'transparent' };
-//       default: return { backgroundColor: Colors.primary };
-//     }
-//   };
-
-//   const getTextColor = () => {
-//     if (disabled) return Colors.textMuted;
-//     return Colors.textPrimary;
-//   };
-
-//   const getPadding = () => {
-//     switch (size) {
-//       case 'small': return { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm };
-//       case 'medium': return { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md };
-//       case 'large': return { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg };
-//       default: return { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md };
-//     }
-//   };
-
-//   return (
-//     <TouchableOpacity
-//       onPress={onPress}
-//       disabled={disabled || loading}
-//       style={[
-//         styles.button,
-//         getStyle(),
-//         getPadding(),
-//         fullWidth && styles.fullWidth,
-//         variant === 'primary' && !disabled && Shadows.primary,
-//         style,
-//       ]}
-//       activeOpacity={0.8}
-//     >
-//       {loading ? (
-//         <ActivityIndicator color={getTextColor()} size="small" />
-//       ) : (
-//         <>
-//           {icon}
-//           <Text style={[styles.text, { color: getTextColor(), fontSize: size === 'large' ? FontSizes.lg : FontSizes.md }]}>
-//             {title}
-//           </Text>
-//         </>
-//       )}
-//     </TouchableOpacity>
-//   );
-// };
-
-// const styles = StyleSheet.create({
-//   button: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     gap: Spacing.sm,
-//     borderRadius: Radius.md,
-//   },
-//   text: {
-//     fontWeight: '600',
-//     letterSpacing: 0.2,
-//   },
-//   fullWidth: {
-//     width: '100%',
-//   },
-// });
-
-// export default Button;
-
-
 import React from 'react';
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from 'react-native';
-import { Colors, Spacing, Radius, FontSizes, Shadows, MIN_TOUCH_TARGET } from '../../constants/theme';
+import {
+  ActivityIndicator,
+  Pressable,
+  StyleSheet,
+  Text,
+} from 'react-native';
+import {
+  Colors,
+  FontSizes,
+  MIN_TOUCH_TARGET,
+  Radius,
+  Shadows,
+  Spacing,
+} from '../../constants/theme';
 
-const Button = ({ 
-  title, 
-  onPress, 
-  variant = 'primary', 
+const SIZE_STYLES = {
+  small: {
+    minHeight: MIN_TOUCH_TARGET,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    fontSize: FontSizes.sm,
+  },
+  medium: {
+    minHeight: 50,
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    fontSize: FontSizes.md,
+  },
+  large: {
+    minHeight: 56,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    fontSize: FontSizes.md,
+  },
+};
+
+const getVariantStyle = (variant, disabled) => {
+  if (disabled) {
+    return {
+      container: {
+        backgroundColor: Colors.bgElevated,
+        borderColor: Colors.border,
+        borderWidth: 1,
+      },
+      text: Colors.textMuted,
+      loader: Colors.textMuted,
+    };
+  }
+
+  switch (variant) {
+    case 'secondary':
+      return {
+        container: {
+          backgroundColor: Colors.secondary,
+          borderColor: Colors.secondary,
+          borderWidth: 1,
+        },
+        text: Colors.textPrimary,
+        loader: Colors.textPrimary,
+      };
+    case 'outline':
+      return {
+        container: {
+          backgroundColor: 'transparent',
+          borderColor: Colors.borderLight,
+          borderWidth: 1,
+        },
+        text: Colors.textPrimary,
+        loader: Colors.primary,
+      };
+    case 'ghost':
+      return {
+        container: {
+          backgroundColor: 'transparent',
+          borderColor: 'transparent',
+          borderWidth: 1,
+        },
+        text: Colors.primaryLight || Colors.primary,
+        loader: Colors.primary,
+      };
+    case 'primary':
+    default:
+      return {
+        container: {
+          backgroundColor: Colors.primary,
+          borderColor: Colors.primary,
+          borderWidth: 1,
+        },
+        text: Colors.textPrimary,
+        loader: Colors.textPrimary,
+      };
+  }
+};
+
+const Button = ({
+  title,
+  onPress,
+  variant = 'primary',
   size = 'medium',
-  disabled = false, 
+  disabled = false,
   loading = false,
   icon,
   fullWidth = false,
   style,
+  textStyle,
   accessibilityLabel,
   accessibilityHint,
 }) => {
-  const getStyle = () => {
-    if (disabled) return { backgroundColor: Colors.bgElevated };
-    switch (variant) {
-      case 'primary': return { backgroundColor: Colors.primary };
-      case 'secondary': return { backgroundColor: Colors.secondary };
-      case 'outline': return { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: Colors.borderLight };
-      case 'ghost': return { backgroundColor: 'transparent' };
-      default: return { backgroundColor: Colors.primary };
-    }
-  };
-
-  const getTextColor = () => {
-    if (disabled) return Colors.textMuted;
-    return Colors.textPrimary;
-  };
-
-  const getPadding = () => {
-    switch (size) {
-      case 'small': return { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm };
-      case 'medium': return { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md };
-      case 'large': return { paddingHorizontal: Spacing.xl, paddingVertical: Spacing.lg };
-      default: return { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md };
-    }
-  };
+  const isDisabled = disabled || loading;
+  const sizeStyle = SIZE_STYLES[size] || SIZE_STYLES.medium;
+  const variantStyle = getVariantStyle(variant, disabled);
 
   return (
-    <TouchableOpacity
+    <Pressable
       onPress={onPress}
-      disabled={disabled || loading}
-      style={[
-        styles.button,
-        getStyle(),
-        getPadding(),
-        fullWidth && styles.fullWidth,
-        variant === 'primary' && !disabled && Shadows.primary,
-        style,
-      ]}
-      activeOpacity={0.8}
+      disabled={isDisabled}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel || title}
       accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: disabled || loading, busy: loading }}
-      hitSlop={size === 'small' ? { top: 8, bottom: 8, left: 8, right: 8 } : undefined}
+      accessibilityState={{ disabled: isDisabled, busy: loading }}
+      hitSlop={size === 'small' ? 8 : undefined}
+      style={({ pressed }) => [
+        styles.button,
+        variantStyle.container,
+        {
+          minHeight: sizeStyle.minHeight,
+          paddingHorizontal: sizeStyle.paddingHorizontal,
+          paddingVertical: sizeStyle.paddingVertical,
+        },
+        fullWidth && styles.fullWidth,
+        variant === 'primary' && !isDisabled && Shadows.primary,
+        pressed && !isDisabled && styles.pressed,
+        style,
+      ]}
     >
       {loading ? (
-        <ActivityIndicator color={getTextColor()} size="small" />
+        <ActivityIndicator color={variantStyle.loader} size="small" />
       ) : (
         <>
           {icon}
-          <Text style={[styles.text, { color: getTextColor(), fontSize: size === 'large' ? FontSizes.lg : FontSizes.md }]}>
+          <Text
+            numberOfLines={1}
+            style={[
+              styles.text,
+              { color: variantStyle.text, fontSize: sizeStyle.fontSize },
+              textStyle,
+            ]}
+          >
             {title}
           </Text>
         </>
       )}
-    </TouchableOpacity>
+    </Pressable>
   );
 };
 
 const styles = StyleSheet.create({
   button: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: 'row',
     gap: Spacing.sm,
-    borderRadius: Radius.md,
-    minHeight: MIN_TOUCH_TARGET,
-  },
-  text: {
-    fontWeight: '600',
-    letterSpacing: 0.2,
+    justifyContent: 'center',
+    borderRadius: Radius.lg,
   },
   fullWidth: {
     width: '100%',
+  },
+  pressed: {
+    opacity: 0.84,
+    transform: [{ scale: 0.985 }],
+  },
+  text: {
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
 });
 

@@ -177,7 +177,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Alert } from 'react-native';
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Gradients, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import useInterviewStore from '../../store/interviewStore';
 
 const HistoryScreen = () => {
@@ -311,7 +311,7 @@ const HistoryScreen = () => {
 };
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.bgPrimary },
+  screen: { flex: 1, ...Gradients.screen },
   header: { 
     flexDirection: 'row', 
     justifyContent: 'space-between', 

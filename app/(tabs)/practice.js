@@ -34,7 +34,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Gradients, Spacing, FontSizes, Radius } from '../../constants/theme';
 
 const PracticeScreen = () => {
   return (
@@ -57,7 +57,7 @@ const PracticeScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgPrimary,
+    ...Gradients.screen,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: Spacing.xl,

@@ -1,4 +1,4 @@
-import { auth, googleProvider } from '../constants/firebase';
+import { auth } from '../constants/firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -6,20 +6,24 @@ import {
   updateProfile,
   sendPasswordResetEmail,
   signInWithCredential,
+  GoogleAuthProvider,
+  reload,
+  deleteUser,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
   onAuthStateChanged // <-- ADDED THIS
 } from 'firebase/auth';
-import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
 
-// Make sure WebBrowser can close properly
-WebBrowser.maybeCompleteAuthSession();
+const profileListeners = new Set();
 
 // Register with Name
 export const registerUser = async (email, password, displayName) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    // Update profile with the user's name
-    await updateProfile(userCredential.user, { displayName: displayName });
+    const cleanDisplayName = displayName.trim();
+    await updateProfile(userCredential.user, { displayName: cleanDisplayName });
+    await reload(userCredential.user);
+    profileListeners.forEach((listener) => listener(userCredential.user));
     return { success: true, user: userCredential.user };
   } catch (error) {
     let message = 'Registration failed.';
@@ -52,23 +56,14 @@ export const resetPassword = async (email) => {
 };
 
 // Google Login
-export const signInWithGoogle = async () => {
+export const signInWithGoogle = async (idToken, accessToken) => {
   try {
-    const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
-    
-    const authResult = await AuthSession.startAsync({
-      authUrl: `https://accounts.google.com/o/oauth2/v2/auth?client_id=${googleProvider.customParameters.client_id}&redirect_uri=${redirectUri}&response_type=code&scope=openid+profile+email`,
-    });
-
-    if (authResult.type === 'success' && authResult.params.code) {
-      // Exchange code for token (handled seamlessly by Firebase)
-      const credential = GoogleAuthProvider.credential(authResult.params.code, undefined, redirectUri);
-      const userCredential = await signInWithCredential(auth, credential);
-      return { success: true, user: userCredential.user };
-    }
-    return { success: false, error: 'Google sign-in was cancelled.' };
+    if (!idToken && !accessToken) return { success: false, error: 'Google did not return a valid sign-in token.' };
+    const credential = GoogleAuthProvider.credential(idToken || null, accessToken || null);
+    const userCredential = await signInWithCredential(auth, credential);
+    return { success: true, user: userCredential.user };
   } catch (error) {
-    return { success: false, error: 'Google sign-in failed.' };
+    return { success: false, error: error?.message || 'Google sign-in failed.' };
   }
 };
 
@@ -85,4 +80,23 @@ export const logoutUser = async () => {
 // Auth Listener
 export const onAuthChange = (callback) => {
   return onAuthStateChanged(auth, callback);
+};
+
+export const getCurrentUser = () => auth.currentUser;
+
+export const deleteCurrentAccount = async (password) => {
+  const user = auth.currentUser;
+  if (!user) throw new Error('No signed-in account was found.');
+  const usesPassword = user.providerData.some((provider) => provider.providerId === 'password');
+  if (usesPassword) {
+    if (!password) throw new Error('Enter your password to confirm account deletion.');
+    await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  }
+  await deleteUser(user);
+};
+
+export const onProfileChange = (callback) => {
+  profileListeners.add(callback);
+  callback(auth.currentUser);
+  return () => profileListeners.delete(callback);
 };

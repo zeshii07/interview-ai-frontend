@@ -6,6 +6,7 @@ const useInterviewStore = create((set, get) => ({
   // Interview session state
   currentRole: null,
   currentDifficulty: 'intermediate',
+  currentLanguage: 'English',
   currentQuestion: null,
   currentAnswer: '',
   currentFeedback: null,
@@ -18,6 +19,7 @@ const useInterviewStore = create((set, get) => ({
   
   // History
   interviewHistory: [],
+  userId: null,
   questionBank: [],
   
   // Error
@@ -26,14 +28,16 @@ const useInterviewStore = create((set, get) => ({
   // Actions
   setRole: (role) => set({ currentRole: role }),
   setDifficulty: (difficulty) => set({ currentDifficulty: difficulty }),
+  setLanguage: (language) => set({ currentLanguage: language }),
   setAnswer: (answer) => set({ currentAnswer: answer }),
   clearError: () => set({ error: null }),
 
   // NEW: Load data from storage on app start
-  initializeApp: async () => {
+  initializeApp: async (userId) => {
+    set({ interviewHistory: [], userId: userId || null, isInitializing: true });
     try {
-      const history = await loadHistory();
-      set({ interviewHistory: history, isInitializing: false });
+      const history = await loadHistory(userId);
+      set({ interviewHistory: history, userId: userId || null, isInitializing: false });
     } catch (error) {
       console.error('Init error:', error);
       set({ isInitializing: false });
@@ -41,16 +45,21 @@ const useInterviewStore = create((set, get) => ({
   },
 
   // Generate new question
-  generateQuestion: async (role, difficulty, questionType) => {
+  generateQuestion: async (role, difficulty, questionType, language) => {
     set({ isGeneratingQuestion: true, error: null, currentFeedback: null, currentAnswer: '' });
     try {
       const response = await interviewAPI.generateQuestion({
         role: role || get().currentRole,
         difficulty: difficulty || get().currentDifficulty,
         questionType: questionType || 'behavioral',
+        language: language || get().currentLanguage,
       });
       
       if (response.success) {
+        const requestedLanguage = language || get().currentLanguage;
+        if (requestedLanguage !== 'English' && response.data?.language !== requestedLanguage) {
+          throw new Error(`The live API is outdated and did not honor ${requestedLanguage}. Deploy backend API v2 before starting the interview.`);
+        }
         set({ 
           currentQuestion: response.data,
           isGeneratingQuestion: false 
@@ -67,7 +76,7 @@ const useInterviewStore = create((set, get) => ({
 
   // Submit answer and get feedback
   submitAnswer: async () => {
-    const { currentRole, currentDifficulty, currentQuestion, currentAnswer } = get();
+    const { currentRole, currentDifficulty, currentLanguage, currentQuestion, currentAnswer } = get();
     
     if (!currentAnswer.trim()) {
       set({ error: 'Please provide an answer' });
@@ -81,6 +90,7 @@ const useInterviewStore = create((set, get) => ({
         difficulty: currentDifficulty,
         question: currentQuestion.question,
         userAnswer: currentAnswer,
+        language: currentLanguage,
       });
 
       if (response.success) {
@@ -90,6 +100,7 @@ const useInterviewStore = create((set, get) => ({
           id: Date.now(),
           role: currentRole,
           difficulty: currentDifficulty,
+          language: currentLanguage,
           question: currentQuestion.question,
           answer: currentAnswer,
           feedback: feedback,
@@ -99,7 +110,7 @@ const useInterviewStore = create((set, get) => ({
         const newHistory = [historyItem, ...get().interviewHistory];
         
         // NEW: Save to local storage!
-        await saveHistory(newHistory);
+        await saveHistory(newHistory, get().userId);
 
         set(state => ({
           currentFeedback: feedback,
@@ -136,10 +147,10 @@ const useInterviewStore = create((set, get) => ({
   },
 
   // Analyze resume
-  analyzeResume: async (resumeText, jobDescription) => {
+  analyzeResume: async (resumeText, jobDescription, file) => {
     set({ isAnalyzingResume: true, error: null });
     try {
-      const response = await interviewAPI.analyzeResume({ resumeText, jobDescription });
+      const response = await interviewAPI.analyzeResume({ resumeText, jobDescription, file });
       
       if (response.success) {
         set({ isAnalyzingResume: false });
@@ -148,8 +159,12 @@ const useInterviewStore = create((set, get) => ({
         throw new Error(response.message);
       }
     } catch (error) {
-      set({ error: error.message, isAnalyzingResume: false });
-      throw error;
+      const legacyUploadError = file && /50 characters|resume text/i.test(error.message);
+      const resolvedError = legacyUploadError
+        ? new Error('The live backend is still on API v1 and cannot accept resume files. Deploy backend API v2, then retry this upload.')
+        : error;
+      set({ error: resolvedError.message, isAnalyzingResume: false });
+      throw resolvedError;
     }
   },
 
@@ -162,7 +177,7 @@ const useInterviewStore = create((set, get) => ({
 
   // Clear all history (also clears storage)
   clearHistory: async () => {
-    await saveHistory([]);
+    await saveHistory([], get().userId);
     set({ interviewHistory: [] });
   },
 }));

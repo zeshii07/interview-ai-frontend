@@ -1,127 +1,70 @@
-// import React from 'react';
-// import { View, Text, StyleSheet } from 'react-native';
-// import Svg, { Circle } from 'react-native-svg';
-// import { Colors, FontSizes, Spacing } from '../../constants/theme';
-
-// const ScoreRing = ({ score, maxScore = 10, size = 120 }) => {
-//   const percentage = (score / maxScore) * 100;
-//   const strokeColor = score >= 7 ? Colors.success : score >= 4 ? Colors.warning : Colors.error;
-  
-//   // SVG Circle Math
-//   const radius = (size - 12) / 2;
-//   const circumference = 2 * Math.PI * radius;
-//   const strokeDashoffset = circumference - (percentage / 100) * circumference;
-
-//   return (
-//     <View style={styles.container}>
-//       <Svg width={size} height={size} style={{ transform: [{ rotate: '-90deg' }] }}>
-//         {/* Background Track */}
-//         <Circle
-//           cx={size / 2}
-//           cy={size / 2}
-//           r={radius}
-//           stroke={Colors.bgElevated}
-//           strokeWidth="8"
-//           fill="transparent"
-//         />
-//         {/* Progress */}
-//         <Circle
-//           cx={size / 2}
-//           cy={size / 2}
-//           r={radius}
-//           stroke={strokeColor}
-//           strokeWidth="8"
-//           fill="transparent"
-//           strokeDasharray={circumference}
-//           strokeDashoffset={strokeDashoffset}
-//           strokeLinecap="round"
-//         />
-//       </Svg>
-//       <View style={styles.textContainer}>
-//         <Text style={[styles.score, { color: strokeColor }]}>{score}</Text>
-//         <Text style={styles.maxScore}>/{maxScore}</Text>
-//       </View>
-//     </View>
-//   );
-// };
-
-// const styles = StyleSheet.create({
-//   container: {
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     position: 'relative',
-//   },
-//   textContainer: {
-//     position: 'absolute',
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//   },
-//   score: {
-//     fontSize: FontSizes.xxxl,
-//     fontWeight: '800',
-//     lineHeight: FontSizes.xxxl,
-//   },
-//   maxScore: {
-//     fontSize: FontSizes.sm,
-//     color: Colors.textMuted,
-//     marginTop: -5,
-//   },
-// });
-
-// export default ScoreRing;
-
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { Colors, FontSizes, Spacing } from '../../constants/theme';
 
-const ScoreRing = ({ score, maxScore = 10, size = 120 }) => {
-  const percentage = (score / maxScore) * 100;
-  const strokeColor = score >= 7 ? Colors.success : score >= 4 ? Colors.warning : Colors.error;
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-  // SVG Circle Math
-  const radius = (size - 12) / 2;
+const ScoreRing = ({ score = 0, maxScore = 10, size = 120, strokeWidth = 9 }) => {
+  const safeMax = Number(maxScore) > 0 ? Number(maxScore) : 10;
+  const safeScore = clamp(Number(score) || 0, 0, safeMax);
+  const percentage = safeScore / safeMax;
+  const radius = (size - strokeWidth * 2) / 2;
   const circumference = 2 * Math.PI * radius;
-  const strokeDashoffset = circumference - (percentage / 100) * circumference;
+  const strokeDashoffset = circumference * (1 - percentage);
+  const strokeColor =
+    safeScore >= safeMax * 0.7
+      ? Colors.success
+      : safeScore >= safeMax * 0.4
+        ? Colors.warning
+        : Colors.error;
 
   return (
     <View
-      style={styles.container}
+      style={[styles.container, { width: size, height: size }]}
       accessible
       accessibilityRole="text"
-      accessibilityLabel={`Score ${score} out of ${maxScore}`}
+      accessibilityLabel={`Score ${safeScore} out of ${safeMax}`}
     >
-      <Svg
-        width={size}
-        height={size}
-        style={{ transform: [{ rotate: '-90deg' }] }}
-        importantForAccessibility="no"
-      >
-        {/* Background Track */}
+      <Svg width={size} height={size} style={styles.svg} importantForAccessibility="no">
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           stroke={Colors.bgElevated}
-          strokeWidth="8"
+          strokeWidth={strokeWidth}
           fill="transparent"
         />
-        {/* Progress */}
         <Circle
           cx={size / 2}
           cy={size / 2}
           r={radius}
           stroke={strokeColor}
-          strokeWidth="8"
+          strokeWidth={strokeWidth}
           fill="transparent"
-          strokeDasharray={circumference}
+          strokeDasharray={`${circumference} ${circumference}`}
           strokeDashoffset={strokeDashoffset}
           strokeLinecap="round"
         />
       </Svg>
-      <View style={styles.textContainer} importantForAccessibility="no">
-        <Text style={[styles.score, { color: strokeColor }]}>{score}</Text>
-        <Text style={styles.maxScore}>/{maxScore}</Text>
+
+      <View style={styles.content} importantForAccessibility="no">
+        <View style={styles.scoreRow}>
+          <Text
+            style={[
+              styles.score,
+              {
+                color: strokeColor,
+                fontSize: Math.max(size * 0.27, FontSizes.xl),
+                lineHeight: Math.max(size * 0.31, FontSizes.xxl),
+              },
+            ]}
+          >
+            {safeScore}
+          </Text>
+          <Text style={styles.maxScore}>/{safeMax}</Text>
+        </View>
+        <Text style={styles.label}>SCORE</Text>
       </View>
     </View>
   );
@@ -129,24 +72,38 @@ const ScoreRing = ({ score, maxScore = 10, size = 120 }) => {
 
 const styles = StyleSheet.create({
   container: {
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
   },
-  textContainer: {
-    position: 'absolute',
-    justifyContent: 'center',
+  svg: {
+    transform: [{ rotate: '-90deg' }],
+  },
+  content: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreRow: {
+    alignItems: 'flex-end',
+    flexDirection: 'row',
   },
   score: {
-    fontSize: FontSizes.xxxl,
-    fontWeight: '800',
-    lineHeight: FontSizes.xxxl,
+    fontWeight: '900',
+    letterSpacing: -1,
   },
   maxScore: {
-    fontSize: FontSizes.sm,
     color: Colors.textMuted,
-    marginTop: -5,
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+    marginBottom: Spacing.xs,
+  },
+  label: {
+    color: Colors.textMuted,
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 1.4,
+    marginTop: -2,
   },
 });
 

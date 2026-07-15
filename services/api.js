@@ -86,8 +86,17 @@ export const interviewAPI = {
   evaluateAnswer: (data) =>
     api.post("/api/interview/evaluate-answer", data),
 
-  analyzeResume: (data) =>
-    api.post("/api/interview/analyze-resume", data),
+  analyzeResume: (data) => {
+    if (!data.file) return api.post("/api/interview/analyze-resume", data);
+    const formData = new FormData();
+    formData.append("resume", {
+      uri: Platform.OS === "ios" ? data.file.uri.replace("file://", "") : data.file.uri,
+      name: data.file.name,
+      type: data.file.mimeType || "application/octet-stream",
+    });
+    formData.append("jobDescription", data.jobDescription || "");
+    return api.post("/api/interview/analyze-resume", formData, { timeout: 120000 });
+  },
 
   getQuestionBank: (data) =>
     api.post("/api/interview/question-bank", data),

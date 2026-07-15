@@ -5,11 +5,11 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "hirely",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "icon": "./assets/icon.png",
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0B0D17",
+        "backgroundColor": "#F3EFFF",
         "foregroundImage": "./assets/icon.png"
       },
       "permissions": [
@@ -20,6 +20,7 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
+      "expo-document-picker",
       "expo-splash-screen",
       [
         "expo-audio",

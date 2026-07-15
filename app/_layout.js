@@ -3,6 +3,7 @@ import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
+  Appearance,
   StyleSheet,
   Text,
   View,
@@ -17,6 +18,8 @@ import { checkOnboardingSeen } from '../utils/storage';
 
 import LoginScreen from './(auth)/login';
 import OnboardingScreen from './(auth)/onboarding';
+
+Appearance.setColorScheme('light');
 
 SplashScreen.preventAutoHideAsync().catch((error) => {
   console.warn('Could not prevent splash auto-hide:', error);
@@ -38,6 +41,7 @@ export default function RootLayout() {
     const loadStoredState = async () => {
       try {
         const seen = await checkOnboardingSeen();
+        Appearance.setColorScheme('light');
 
         if (mounted) {
           setShowOnboarding(!seen);
@@ -124,7 +128,7 @@ export default function RootLayout() {
     return (
       <>
         <StatusBar
-          style="light"
+          style="dark"
           backgroundColor={Colors.bgPrimary}
         />
         <OnboardingScreen />
@@ -136,7 +140,7 @@ export default function RootLayout() {
     return (
       <>
         <StatusBar
-          style="light"
+          style="dark"
           backgroundColor={Colors.bgPrimary}
         />
 
@@ -154,11 +158,12 @@ export default function RootLayout() {
   return (
     <>
       <StatusBar
-        style="light"
+        style="dark"
         backgroundColor={Colors.bgPrimary}
       />
 
       <Stack
+        key="light"
         screenOptions={{
           headerStyle: {
             backgroundColor: Colors.bgPrimary,
@@ -180,7 +185,10 @@ export default function RootLayout() {
         <Stack.Screen
           name="interview/session"
           options={{
-            title: 'Session',
+            title: 'AI Interview',
+            headerStyle: { backgroundColor: Colors.bgPrimary },
+            headerTintColor: Colors.textPrimary,
+            contentStyle: { backgroundColor: Colors.bgPrimary },
           }}
         />
 
@@ -190,6 +198,9 @@ export default function RootLayout() {
             title: 'Resume AI',
           }}
         />
+        <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
+        <Stack.Screen name="settings/about" options={{ title: 'About Hirely' }} />
+        <Stack.Screen name="settings/delete-account" options={{ title: 'Account & Data' }} />
       </Stack>
     </>
   );

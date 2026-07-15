@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence, GoogleAuthProvider } from 'firebase/auth';
+import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
@@ -26,12 +26,5 @@ try {
 } catch (error) {
   auth = initializeAuth(app); 
 }
-
-// ADD THIS: Configure Google Provider with your Client ID
-export const googleProvider = new GoogleAuthProvider();
-googleProvider.addScope('profile');
-googleProvider.addScope('email');
-// Paste your Web Client ID from Google Cloud Console here:
-googleProvider.setCustomParameters({ client_id: '942664899237-grjioq8dl0m6hbpai871plmak0qsrb08.apps.googleusercontent.com' });
 
 export { auth };

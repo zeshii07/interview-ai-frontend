@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { Colors, Spacing } from '../../constants/theme';
 import useInterviewStore from '../../store/interviewStore';
+import { getCurrentUser } from '../../services/authService';
 
 export default function TabLayout() {
   const initializeApp = useInterviewStore(
@@ -14,7 +15,7 @@ export default function TabLayout() {
   useEffect(() => {
     const initialize = async () => {
       try {
-        await Promise.resolve(initializeApp());
+        await Promise.resolve(initializeApp(getCurrentUser()?.uid));
       } catch (error) {
         console.error(
           'Interview store initialization failed:',
@@ -63,6 +64,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
+          headerShown: false,
+          tabBarStyle: { display: 'none' },
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'home' : 'home-outline'}

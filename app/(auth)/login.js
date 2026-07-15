@@ -1,271 +1,205 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Modal, ScrollView } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
-import Button from '../../components/ui/Button';
-import { registerUser, loginUser, resetPassword, signInWithGoogle } from '../../services/authService';
+import { StatusBar } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { loginUser, registerUser, resetPassword } from '../../services/authService';
+import LegalModal from '../../components/legal-modal';
+import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../components/legal-content';
+import { loadPreferences, savePreferences } from '../../utils/storage';
+import { Colors, Gradients } from '../../constants/theme';
 
-const LoginScreen = () => {
+const PURPLE = '#6541F5';
+const INK = Colors.textPrimary;
+const MUTED = Colors.textSecondary;
+const BORDER = Colors.border;
+export default function LoginScreen() {
+  const insets = useSafeAreaInsets();
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false); // NEW: Eye toggle state
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [focused, setFocused] = useState(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
   const [resetEmail, setResetEmail] = useState('');
+  const [unavailableProvider, setUnavailableProvider] = useState(null);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [legal, setLegal] = useState(null);
 
-  const handleAuth = async () => {
-    if (!email || !password || (!isLogin && !name)) {
-      Alert.alert("Missing Info", "Please fill in all fields.");
+  const authenticate = async () => {
+    const cleanEmail = email.trim();
+    const cleanName = name.trim();
+    if (!cleanEmail || !password || (!isLogin && !cleanName)) {
+      Alert.alert('Missing information', 'Please complete all required fields.');
+      return;
+    }
+    if (!isLogin && password !== confirmPassword) {
+      Alert.alert('Passwords do not match', 'Please enter the same password in both fields.');
+      return;
+    }
+    if (!isLogin && !acceptedTerms) {
+      Alert.alert('Accept the terms', 'Please review and accept the Terms & Conditions and Privacy Policy to create your account.');
       return;
     }
     setLoading(true);
-    const result = isLogin 
-      ? await loginUser(email, password) 
-      : await registerUser(email, password, name);
-    setLoading(false);
-    if (!result.success) Alert.alert("Error", result.error);
+    try {
+      const result = isLogin
+        ? await loginUser(cleanEmail, password)
+        : await registerUser(cleanEmail, password, cleanName);
+      if (!result.success) Alert.alert('Unable to continue', result.error || 'Please try again.');
+      else if (!isLogin) { const preferences = await loadPreferences(); await savePreferences({ ...preferences, acceptedTerms: true }); }
+    } catch (error) {
+      Alert.alert('Unable to continue', error?.message || 'Please try again.');
+    } finally { setLoading(false); }
   };
 
-  const handleGoogle = async () => {
+  const sendReset = async () => {
+    if (!resetEmail.trim()) return Alert.alert('Email required', 'Enter the email linked to your account.');
     setLoading(true);
-    const result = await signInWithGoogle();
-    setLoading(false);
-    if (!result.success) Alert.alert("Error", result.error);
+    try {
+      const result = await resetPassword(resetEmail.trim());
+      if (result.success) {
+        Alert.alert('Check your inbox', result.message);
+        setForgotOpen(false);
+        setResetEmail('');
+      } else Alert.alert('Reset failed', result.error || 'Please try again.');
+    } catch (error) {
+      Alert.alert('Reset failed', error?.message || 'Please try again.');
+    } finally { setLoading(false); }
   };
 
-  const handleReset = async () => {
-    if (!resetEmail) return Alert.alert("Error", "Enter your email.");
-    setLoading(true);
-    const result = await resetPassword(resetEmail);
-    setLoading(false);
-    if (result.success) {
-      Alert.alert("Success", result.message);
-      setShowForgotModal(false);
-    } else {
-      Alert.alert("Error", result.error);
-    }
+  const field = ({ id, icon, placeholder, value, onChangeText, secure, eye, passwordVisible, onTogglePassword, ...props }) => (
+    <View style={[styles.inputShell, focused === id && styles.inputFocused]}>
+      <Ionicons name={icon} size={25} color="#73778D" />
+      <TextInput
+        style={styles.input}
+        placeholder={placeholder}
+        placeholderTextColor="#A9ABBA"
+        value={value}
+        onChangeText={onChangeText}
+        onFocus={() => setFocused(id)}
+        onBlur={() => setFocused(null)}
+        secureTextEntry={secure}
+        editable={!loading}
+        selectionColor={PURPLE}
+        autoCorrect={false}
+        {...props}
+      />
+      {eye && <Pressable onPress={onTogglePassword} hitSlop={12} style={styles.eye} accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}><Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={26} color="#73778D" /></Pressable>}
+    </View>
+  );
+
+  const toggleMode = () => {
+    setIsLogin((v) => !v);
+    setPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
+    setAcceptedTerms(false);
   };
 
   return (
-    <KeyboardAvoidingView 
-      style={styles.screen} 
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <ScrollView 
-        style={{ flex: 1 }} 
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        bounces={true}
-      >
-        {/* Modern Bright Top Section */}
-        <View style={styles.topSection}>
-          {/* Decorative Glow Circles for modern look */}
-          <View style={styles.glowCircle1} />
-          <View style={styles.glowCircle2} />
-          
-          <Text style={styles.logo}>Hirely</Text>
-          <Text style={styles.topSubtitle}>Master your interviews with AI</Text>
+    <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <StatusBar style="dark" />
+      <View pointerEvents="none" style={styles.leftGlow} />
+      <View pointerEvents="none" style={styles.rightGlow} />
+      <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false} contentContainerStyle={[styles.content, { paddingBottom: Math.max(insets.bottom, 20) + 12 }]}>
+        <View style={styles.brandBlock}>
+          <Image source={require('../../assets/logo.png')} resizeMode="contain" style={styles.logoImage} accessibilityLabel="Hirely" />
         </View>
-
-        {/* Bottom Form Section */}
-        <View style={styles.bottomSection}>
-          <Text style={styles.formTitle}>{isLogin ? 'Welcome Back' : 'Create Account'}</Text>
-          <Text style={styles.formSubtitle}>{isLogin ? 'Sign in to continue' : 'Sign up to get started'}</Text>
-
-          {/* Name Input */}
-          {!isLogin && (
-            <View style={styles.inputGroup}>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="person-outline" size={20} color={Colors.textMuted} />
-                <TextInput style={styles.input} placeholder="Full Name" placeholderTextColor={Colors.textMuted} value={name} onChangeText={setName} autoCapitalize="words" />
-              </View>
-            </View>
-          )}
-
-          {/* Email Input */}
-          <View style={styles.inputGroup}>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
-              <TextInput style={styles.input} placeholder="Email Address" placeholderTextColor={Colors.textMuted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-            </View>
+        <View style={styles.heading}>
+          <Text style={styles.title}>{isLogin ? 'Welcome back!' : 'Create Your Account'}</Text>
+          <Text style={styles.subtitle}>{isLogin ? 'Login to continue your journey' : 'Sign up to start your journey'}</Text>
+        </View>
+        <View style={styles.form}>
+          {!isLogin && field({ id: 'name', icon: 'person-outline', placeholder: 'Full Name', value: name, onChangeText: setName, autoCapitalize: 'words', autoComplete: 'name', textContentType: 'name' })}
+          {field({ id: 'email', icon: 'mail-outline', placeholder: 'Email Address', value: email, onChangeText: setEmail, keyboardType: 'email-address', autoCapitalize: 'none', autoComplete: 'email', textContentType: 'emailAddress' })}
+          {field({ id: 'password', icon: 'lock-closed-outline', placeholder: isLogin ? 'Password' : 'Create Password', value: password, onChangeText: setPassword, secure: !showPassword, eye: true, passwordVisible: showPassword, onTogglePassword: () => setShowPassword((value) => !value), autoCapitalize: 'none', autoComplete: isLogin ? 'current-password' : 'new-password', textContentType: isLogin ? 'password' : 'newPassword' })}
+          {!isLogin && field({ id: 'confirm', icon: 'lock-closed-outline', placeholder: 'Confirm Password', value: confirmPassword, onChangeText: setConfirmPassword, secure: !showConfirmPassword, eye: true, passwordVisible: showConfirmPassword, onTogglePassword: () => setShowConfirmPassword((value) => !value), autoCapitalize: 'none', autoComplete: 'new-password', textContentType: 'newPassword' })}
+          {!isLogin && <View style={styles.consentRow}><Pressable onPress={()=>setAcceptedTerms(value=>!value)} accessibilityRole="checkbox" accessibilityState={{checked:acceptedTerms}} style={[styles.checkbox,acceptedTerms&&styles.checkboxChecked]}>{acceptedTerms?<Ionicons name="checkmark" size={17} color="#FFF"/>:null}</Pressable><Text style={styles.consentText}>I agree to the <Text onPress={()=>setLegal('terms')} style={styles.consentLink}>Terms & Conditions</Text> and acknowledge the <Text onPress={()=>setLegal('privacy')} style={styles.consentLink}>Privacy Policy</Text>.</Text></View>}
+          {isLogin && <Pressable onPress={() => { setResetEmail(email.trim()); setForgotOpen(true); }} style={styles.forgot}><Text style={styles.forgotText}>Forgot password?</Text></Pressable>}
+          <Pressable onPress={authenticate} disabled={loading} style={({ pressed }) => [styles.primary, pressed && styles.pressed, loading && styles.disabled]}><Text style={styles.primaryText}>{loading ? 'Please wait…' : isLogin ? 'Login' : 'Sign Up'}</Text></Pressable>
+          <View style={styles.divider}><View style={styles.line} /><Text style={styles.dividerText}>or continue with</Text><View style={styles.line} /></View>
+          <View style={styles.socialRow}>
+            <Pressable onPress={() => setUnavailableProvider('Google')} disabled={loading} style={({ pressed }) => [styles.social, pressed && styles.pressed]}><Text style={styles.google}>G</Text><Text style={styles.socialText}>Google</Text></Pressable>
+            <Pressable onPress={() => setUnavailableProvider('Apple')} disabled={loading} style={({ pressed }) => [styles.social, pressed && styles.pressed]}><Ionicons name="logo-apple" size={30} color="#050505" /><Text style={styles.socialText}>Apple</Text></Pressable>
           </View>
-
-          {/* Password Input with Eye Toggle */}
-          <View style={styles.inputGroup}>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="lock-closed-outline" size={20} color={Colors.textMuted} />
-              <TextInput 
-                style={styles.input} 
-                placeholder="Password" 
-                placeholderTextColor={Colors.textMuted} 
-                value={password} 
-                onChangeText={setPassword} 
-                secureTextEntry={!showPassword} // Toggles based on state
-              />
-              <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Forgot Password */}
-          {isLogin && (
-            <TouchableOpacity onPress={() => setShowForgotModal(true)} style={styles.forgotContainer}>
-              <Text style={styles.forgotText}>Forgot Password?</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Primary Button */}
-          <Button 
-            title={isLogin ? 'Sign In' : 'Create Account'} 
-            onPress={handleAuth} 
-            loading={loading} 
-            fullWidth 
-            size="large" 
-          />
-
-          {/* Toggle Auth */}
-          <TouchableOpacity onPress={() => setIsLogin(!isLogin)} style={styles.toggleContainer}>
-            <Text style={styles.toggleText}>
-              {isLogin ? "Don't have an account? " : "Already have an account? "}
-              <Text style={styles.toggleHighlight}>{isLogin ? 'Sign Up' : 'Sign In'}</Text>
-            </Text>
-          </TouchableOpacity>
-
-          {/* Spacer */}
-          <View style={{ flex: 1, minHeight: Spacing.xl }} />
-
-          {/* Bottom Section */}
-          <View style={styles.dividerRow}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          <TouchableOpacity style={styles.googleBtn} onPress={handleGoogle} disabled={loading}>
-            <Ionicons name="logo-google" size={20} color={Colors.textPrimary} />
-            <Text style={styles.googleBtnText}>Continue with Google</Text>
-          </TouchableOpacity>
-
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>Powered by Advanced AI</Text>
-            <Text style={styles.footerSubtext}>Secure & Private</Text>
-          </View>
+          <Pressable onPress={toggleMode} disabled={loading} style={styles.toggle}><Text style={styles.toggleText}>{isLogin ? "Don't have an account?  " : 'Already have an account? '}<Text style={styles.toggleLink}>{isLogin ? 'Sign up' : 'Log in'}</Text></Text></Pressable>
         </View>
       </ScrollView>
-
-      {/* Forgot Password Modal */}
-      <Modal visible={showForgotModal} transparent animationType="slide">
+      <Modal visible={forgotOpen} transparent animationType="fade" onRequestClose={() => setForgotOpen(false)}>
+        <KeyboardAvoidingView style={styles.modalOverlay} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => !loading && setForgotOpen(false)} />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeader}><Text style={styles.modalTitle}>Reset your password</Text><Pressable onPress={() => setForgotOpen(false)} hitSlop={12}><Ionicons name="close" size={24} color={MUTED} /></Pressable></View>
+            <Text style={styles.modalCopy}>Enter your account email and we’ll send you a secure reset link.</Text>
+            {field({ id: 'reset', icon: 'mail-outline', placeholder: 'Email Address', value: resetEmail, onChangeText: setResetEmail, keyboardType: 'email-address', autoCapitalize: 'none', autoComplete: 'email' })}
+            <Pressable onPress={sendReset} disabled={loading} style={[styles.primary, loading && styles.disabled]}><Text style={styles.primaryText}>{loading ? 'Please wait…' : 'Send reset link'}</Text></Pressable>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+      <Modal visible={Boolean(unavailableProvider)} transparent animationType="fade" onRequestClose={() => setUnavailableProvider(null)}>
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Reset Password</Text>
-            <Text style={styles.modalSubtitle}>Enter your email to receive a reset link.</Text>
-            <View style={[styles.inputWrapper, { marginBottom: 0 }]}>
-              <Ionicons name="mail-outline" size={20} color={Colors.textMuted} />
-              <TextInput style={styles.input} placeholder="Email Address" placeholderTextColor={Colors.textMuted} value={resetEmail} onChangeText={setResetEmail} keyboardType="email-address" autoCapitalize="none" />
-            </View>
-            <View style={styles.modalActions}>
-              <Button title="Cancel" onPress={() => setShowForgotModal(false)} variant="outline" size="medium" />
-              <Button title="Send Link" onPress={handleReset} size="medium" loading={loading} />
-            </View>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setUnavailableProvider(null)} />
+          <View style={[styles.modalCard, styles.unavailableCard]}>
+            <View style={styles.unavailableIcon}><Ionicons name="sparkles" size={28} color={PURPLE} /></View>
+            <Text style={styles.modalTitle}>{unavailableProvider} sign-in</Text>
+            <Text style={[styles.modalCopy, styles.unavailableCopy]}>This option is currently unavailable. Please continue securely with your email and password.</Text>
+            <Pressable onPress={() => setUnavailableProvider(null)} style={styles.primary}><Text style={styles.primaryText}>Got it</Text></Pressable>
           </View>
         </View>
       </Modal>
+      <LegalModal visible={legal==='privacy'} title="Hirely Privacy Policy" sections={PRIVACY_SECTIONS} onClose={()=>setLegal(null)}/>
+      <LegalModal visible={legal==='terms'} title="Terms & Conditions" sections={TERMS_SECTIONS} onClose={()=>setLegal(null)}/>
     </KeyboardAvoidingView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.bgPrimary },
-  scrollContent: { flexGrow: 1 },
-  
-  // Modern Brighter Top Section
-  topSection: { 
-    height: 280, 
-    backgroundColor: Colors.primary, // Changed to bright purple
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    borderBottomLeftRadius: 40, 
-    borderBottomRightRadius: 40,
-    paddingHorizontal: Spacing.xl,
-    overflow: 'hidden' // Allows glow circles to bleed outside edges slightly
-  },
-  // Modern Glow Effects
-  glowCircle1: {
-    position: 'absolute',
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    top: -60,
-    right: -40
-  },
-  glowCircle2: {
-    position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    bottom: 30,
-    left: -30
-  },
-  logo: { color: Colors.textPrimary, fontSize: 42, fontWeight: '900', letterSpacing: 3, textTransform: 'uppercase', zIndex: 1 },
-  topSubtitle: { color: 'rgba(255,255,255,0.9)', fontSize: FontSizes.md, marginTop: Spacing.sm, textAlign: 'center', fontWeight: '500', zIndex: 1 },
-
-  bottomSection: { 
-    paddingHorizontal: Spacing.lg, 
-    paddingTop: Spacing.xl,
-    flex: 1
-  },
-  formTitle: { color: Colors.textPrimary, fontSize: FontSizes.xxl, fontWeight: '800' },
-  formSubtitle: { color: Colors.textMuted, fontSize: FontSizes.md, marginTop: Spacing.xs, marginBottom: Spacing.xl },
-  
-  inputGroup: { marginBottom: Spacing.md },
-  inputWrapper: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: Colors.bgElevated, 
-    borderWidth: 1.5, 
-    borderColor: Colors.border, 
-    borderRadius: Radius.md, 
-    paddingHorizontal: Spacing.md, 
-    height: 54, 
-    marginBottom: Spacing.md 
-  },
-  input: { flex: 1, color: Colors.textPrimary, fontSize: FontSizes.md, marginLeft: Spacing.sm, height: '100%' },
-  
-  // Eye Toggle Button
-  eyeBtn: { 
-    padding: Spacing.sm, 
-    marginLeft: Spacing.sm 
-  },
-
-  forgotContainer: { alignSelf: 'flex-end', marginBottom: Spacing.lg },
-  forgotText: { color: Colors.primaryLight, fontSize: FontSizes.sm, fontWeight: '600' },
-
-  toggleContainer: { marginTop: Spacing.md, alignItems: 'center' },
-  toggleText: { color: Colors.textMuted, fontSize: FontSizes.sm },
-  toggleHighlight: { color: Colors.primaryLight, fontWeight: '700' },
-
-  dividerRow: { flexDirection: 'row', alignItems: 'center', marginVertical: Spacing.lg },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { color: Colors.textMuted, marginHorizontal: Spacing.md, fontWeight: '600' },
-
-  googleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.bgElevated, borderWidth: 1.5, borderColor: Colors.borderLight, borderRadius: Radius.md, height: 54 },
-  googleBtnText: { color: Colors.textPrimary, fontSize: FontSizes.md, fontWeight: '700', marginLeft: Spacing.sm },
-
-  footer: { alignItems: 'center', marginTop: Spacing.xl, paddingBottom: Spacing.lg },
-  footerText: { color: Colors.textMuted, fontSize: FontSizes.xs, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 1 },
-  footerSubtext: { color: Colors.textMuted, fontSize: 10, marginTop: 4, opacity: 0.6 },
-
-  // Modal Styles
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', padding: Spacing.lg },
-  modalContent: { backgroundColor: Colors.bgCard, borderRadius: Radius.lg, padding: Spacing.xl, width: '100%', borderWidth: 1, borderColor: Colors.border },
-  modalTitle: { color: Colors.textPrimary, fontSize: FontSizes.xl, fontWeight: '800', marginBottom: Spacing.sm },
-  modalSubtitle: { color: Colors.textSecondary, fontSize: FontSizes.sm, marginBottom: Spacing.lg },
-  modalActions: { flexDirection: 'row', gap: Spacing.sm, marginTop: Spacing.lg }
+  screen: { flex: 1, ...Gradients.screen },
+  content: { flexGrow: 1, width: '100%', maxWidth: 620, alignSelf: 'center', paddingHorizontal: 28, paddingTop: 52 },
+  leftGlow: { position: 'absolute', width: 390, height: 560, borderRadius: 260, backgroundColor: Colors.primaryBg, top: -275, left: -235, transform: [{ rotate: '-18deg' }] },
+  rightGlow: { position: 'absolute', width: 270, height: 500, borderRadius: 180, backgroundColor: Colors.bgSecondary, top: 350, right: -225 },
+  brandBlock: { alignItems: 'center', paddingTop: 34 },
+  logoImage: { width: 230, height: 108 },
+  heading: { alignItems: 'center', paddingTop: 24, paddingBottom: 34 },
+  title: { color: INK, fontSize: 27, lineHeight: 34, fontWeight: '800', textAlign: 'center' },
+  subtitle: { color: MUTED, fontSize: 18, lineHeight: 25, paddingTop: 7, textAlign: 'center' },
+  form: { gap: 16 },
+  inputShell: { height: 66, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: BORDER, borderRadius: 15, borderCurve: 'continuous', backgroundColor: Colors.bgCard, paddingHorizontal: 18 },
+  inputFocused: { borderColor: PURPLE, boxShadow: '0 0 0 3px rgba(101,65,245,0.10)' },
+  input: { flex: 1, height: '100%', paddingHorizontal: 17, paddingVertical: 0, color: INK, fontSize: 17 },
+  eye: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  forgot: { alignSelf: 'flex-end', minHeight: 30, justifyContent: 'center', marginTop: -6 },
+  forgotText: { color: PURPLE, fontSize: 16, fontWeight: '700' },
+  primary: { height: 66, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderCurve: 'continuous', backgroundColor: PURPLE, boxShadow: '0 10px 28px rgba(101,65,245,0.22)' },
+  primaryText: { color: '#FFF', fontSize: 19, fontWeight: '700' },
+  pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
+  disabled: { opacity: 0.55 },
+  divider: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 13 },
+  line: { flex: 1, height: 1, backgroundColor: Colors.border },
+  dividerText: { color: MUTED, fontSize: 16 },
+  socialRow: { flexDirection: 'row', gap: 14 },
+  social: { flex: 1, height: 64, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 13, borderWidth: 1, borderColor: BORDER, borderRadius: 14, borderCurve: 'continuous', backgroundColor: Colors.bgCard },
+  google: { color: '#4285F4', fontSize: 29, fontWeight: '900' },
+  socialText: { color: INK, fontSize: 18, fontWeight: '500' },
+  toggle: { minHeight: 48, alignItems: 'center', justifyContent: 'center', marginTop: 13 },
+  toggleText: { color: MUTED, fontSize: 16, textAlign: 'center' },
+  toggleLink: { color: PURPLE, fontWeight: '700' },
+  modalOverlay: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(17,20,47,0.45)' },
+  modalCard: { width: '100%', maxWidth: 480, alignSelf: 'center', gap: 18, borderRadius: 24, borderCurve: 'continuous', backgroundColor: Colors.bgCard, padding: 24, boxShadow: '0 20px 45px rgba(17,20,47,0.2)' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalTitle: { color: INK, fontSize: 24, fontWeight: '800' },
+  modalCopy: { color: MUTED, fontSize: 15, lineHeight: 22 },
+  unavailableCard: { alignItems: 'center' },
+  unavailableIcon: { width: 62, height: 62, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primaryBg },
+  unavailableCopy: { textAlign: 'center' },
+  consentRow:{flexDirection:'row',alignItems:'flex-start',gap:11},
+  checkbox:{width:25,height:25,borderRadius:7,borderWidth:1.5,borderColor:BORDER,alignItems:'center',justifyContent:'center',backgroundColor:Colors.bgCard},
+  checkboxChecked:{borderColor:PURPLE,backgroundColor:PURPLE},
+  consentText:{flex:1,color:MUTED,fontSize:12,lineHeight:19},consentLink:{color:PURPLE,fontWeight:'800'},
 });
-
-export default LoginScreen;

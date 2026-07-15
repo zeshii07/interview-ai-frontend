@@ -171,7 +171,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Gradients, Spacing, FontSizes, Radius } from '../../constants/theme';
 import { setOnboardingSeen } from '../../utils/storage';
 
 const slides = [
@@ -290,7 +290,7 @@ const OnboardingScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.bgPrimary,
+    ...Gradients.screen,
   },
   slideContainer: {
     flex: 1,
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   nextText: {
-    color: Colors.textPrimary,
+    color: '#FFFFFF',
     fontSize: FontSizes.md,
     fontWeight: '700',
   },
