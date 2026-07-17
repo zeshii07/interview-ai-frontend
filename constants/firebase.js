@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getDatabase } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
@@ -9,10 +10,12 @@ const firebaseConfig = {
   projectId: "hirely-8f434",
   storageBucket: "hirely-8f434.firebasestorage.app",
   messagingSenderId: "942664899237",
-  appId: "1:942664899237:web:431621f24ff123e8240b4c"
+  appId: "1:942664899237:web:431621f24ff123e8240b4c",
+  databaseURL: "https://hirely-8f434-default-rtdb.firebaseio.com"
 };
 
 const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
 let auth;
 try {
@@ -27,4 +30,4 @@ try {
   auth = initializeAuth(app); 
 }
 
-export { auth };
+export { auth, db };

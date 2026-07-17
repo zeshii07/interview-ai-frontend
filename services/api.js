@@ -2,6 +2,23 @@ import axios from "axios";
 import { Platform } from "react-native";
 import { API_BASE_URL } from "../constants/config";
 
+export const SUPPORTED_INTERVIEW_LANGUAGES = [
+  "English",
+  "Urdu",
+  "Hindi",
+  "Arabic",
+  "Spanish",
+  "French",
+  "German",
+];
+
+function normalizeLanguage(language) {
+  const requested = String(language || "").trim().toLowerCase();
+  return SUPPORTED_INTERVIEW_LANGUAGES.find(
+    (item) => item.toLowerCase() === requested
+  ) || "English";
+}
+
 const api = axios.create({
   baseURL: API_BASE_URL,
   timeout: 60000,
@@ -41,8 +58,22 @@ api.interceptors.response.use(
   }
 );
 
+function normalizeRecentQuestions(previousQuestions = []) {
+  if (!Array.isArray(previousQuestions)) {
+    return [];
+  }
+
+  return previousQuestions
+    .map((item) => {
+      if (typeof item === "string") return item.trim();
+      return String(item?.question || "").trim();
+    })
+    .filter(Boolean)
+    .slice(-8);
+}
+
 export const interviewAPI = {
-  transcribeAudio: async (uri) => {
+  transcribeAudio: async (uri, language = "English") => {
     if (!uri) {
       throw new Error("Audio URI is missing.");
     }
@@ -69,6 +100,7 @@ export const interviewAPI = {
       name: `recording-${Date.now()}.${extension}`,
       type: mimeTypes[extension] || "audio/mp4",
     });
+    formData.append("language", normalizeLanguage(language));
 
     return api.post("/api/interview/transcribe", formData, {
       timeout: 120000,
@@ -80,26 +112,111 @@ export const interviewAPI = {
 
   getRoles: () => api.get("/api/interview/roles"),
 
-  generateQuestion: (data) =>
-    api.post("/api/interview/generate-question", data),
+  generateQuestion: ({
+    role,
+    difficulty,
+    questionType = "mixed",
+    language = "English",
+    previousQuestions = [],
+  }) =>
+    api.post(
+      "/api/interview/generate-question",
+      {
+        role,
+        difficulty,
+        questionType,
+        language: normalizeLanguage(language),
+        previousQuestions: normalizeRecentQuestions(previousQuestions),
+      },
+      {
+        timeout: 90000,
+      }
+    ),
 
-  evaluateAnswer: (data) =>
-    api.post("/api/interview/evaluate-answer", data),
+  evaluateAnswer: ({
+    role,
+    difficulty,
+    question,
+    questionCategory,
+    userAnswer,
+    language = "English",
+  }) =>
+    api.post(
+      "/api/interview/evaluate-answer",
+      {
+        role,
+        difficulty,
+        question,
+        questionCategory,
+        userAnswer,
+        language: normalizeLanguage(language),
+      },
+      {
+        timeout: 120000,
+      }
+    ),
 
   analyzeResume: (data) => {
-    if (!data.file) return api.post("/api/interview/analyze-resume", data);
+    if (!data.file) {
+      return api.post("/api/interview/analyze-resume", {
+        ...data,
+        language: normalizeLanguage(data.language),
+      }, {
+        timeout: 120000,
+      });
+    }
+
     const formData = new FormData();
+
     formData.append("resume", {
-      uri: Platform.OS === "ios" ? data.file.uri.replace("file://", "") : data.file.uri,
+      uri:
+        Platform.OS === "ios"
+          ? data.file.uri.replace("file://", "")
+          : data.file.uri,
       name: data.file.name,
       type: data.file.mimeType || "application/octet-stream",
     });
-    formData.append("jobDescription", data.jobDescription || "");
-    return api.post("/api/interview/analyze-resume", formData, { timeout: 120000 });
+
+    formData.append(
+      "jobDescription",
+      data.jobDescription || ""
+    );
+    formData.append("language", normalizeLanguage(data.language));
+
+    return api.post(
+      "/api/interview/analyze-resume",
+      formData,
+      {
+        timeout: 120000,
+      }
+    );
   },
 
-  getQuestionBank: (data) =>
-    api.post("/api/interview/question-bank", data),
+  getQuestionBank: ({
+    role,
+    count = 10,
+    difficulty = "mixed",
+    language = "English",
+  }) =>
+    api.post(
+      "/api/interview/question-bank",
+      {
+        role,
+        count,
+        difficulty,
+        language: normalizeLanguage(language),
+      },
+      {
+        timeout: 120000,
+      }
+    ),
+};
+
+export const resumeAPI = {
+  generate: (data) =>
+    api.post("/api/resume/generate", data, {
+      timeout: 120000,
+    }),
 };
 
 export default api;

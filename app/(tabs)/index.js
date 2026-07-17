@@ -35,11 +35,17 @@ const palette = {
 
 const tools = [
   {
+    title: 'ATS Resume\nGenerator',
+    description: 'Generate a pro PDF resume',
+    icon: 'document-text-outline',
+    route: '/resume/generator',
+    featured: true,
+  },
+  {
     title: 'Analyze Your\nResume',
     description: 'Improve your resume',
     icon: 'document-text-outline',
     route: '/resume/analyze',
-    featured: true,
   },
   {
     title: 'Question\nBank',
@@ -177,8 +183,17 @@ export default function HomeScreen() {
 
   const ratings = history
     .map((item) => {
-      const rating = Number(item.feedback?.rating);
-      const max = Number(item.feedback?.rating_max) || 10;
+      const hasSessionAverage =
+        item.averageScore !== null &&
+        item.averageScore !== undefined;
+      const rating = Number(
+        hasSessionAverage
+          ? item.averageScore
+          : item.feedback?.rating
+      );
+      const max = hasSessionAverage
+        ? 10
+        : Number(item.feedback?.rating_max) || 10;
       return Number.isFinite(rating) && max > 0 ? (rating / max) * 10 : null;
     })
     .filter((rating) => rating !== null);

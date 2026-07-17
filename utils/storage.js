@@ -92,7 +92,16 @@ export const setOnboardingSeen = async () => {
 
 export const clearAllData = async () => {
   try {
-    await AsyncStorage.multiRemove([KEYS.HISTORY, KEYS.FAVORITES, KEYS.ONBOARDING, KEYS.PREFERENCES]);
+    const storedKeys = await AsyncStorage.getAllKeys();
+    const historyKeys = storedKeys.filter(
+      (key) => key === KEYS.HISTORY || key.startsWith(`${KEYS.HISTORY}:`)
+    );
+    await AsyncStorage.multiRemove([
+      ...historyKeys,
+      KEYS.FAVORITES,
+      KEYS.ONBOARDING,
+      KEYS.PREFERENCES,
+    ]);
   } catch (error) {
     console.error('Failed to clear data');
   }

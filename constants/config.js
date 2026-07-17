@@ -1,6 +1,6 @@
 // Always use the live Railway URL for both development and production
 // so that the app works when you build the APK
-export const API_BASE_URL = 'https://interview-i-backend-production.up.railway.app';
+export const API_BASE_URL = 'https://hirely-backend-3nzs.onrender.com';
 
 export const ROLES = [
   'Frontend Developer',

@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'react-native';
 
 import LoadingOverlay from '../../components/ui/LoadingOverlay';
 import useInterviewStore from '../../store/interviewStore';

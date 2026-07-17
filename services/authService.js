@@ -1,4 +1,5 @@
 import { auth } from '../constants/firebase';
+import { deleteCloudHistory } from './historyService';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -92,6 +93,7 @@ export const deleteCurrentAccount = async (password) => {
     if (!password) throw new Error('Enter your password to confirm account deletion.');
     await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
   }
+  await deleteCloudHistory(user.uid);
   await deleteUser(user);
 };
 

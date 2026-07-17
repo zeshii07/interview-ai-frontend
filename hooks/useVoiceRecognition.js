@@ -9,8 +9,10 @@ import {
 } from 'expo-audio';
 
 import { interviewAPI } from '../services/api';
+import useInterviewStore from '../store/interviewStore';
 
 export const useVoiceRecognition = () => {
+  const currentLanguage = useInterviewStore((state) => state.currentLanguage);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
 
@@ -97,7 +99,7 @@ export const useVoiceRecognition = () => {
           throw new Error('The audio recorder did not return a file URI.');
         }
 
-        const response = await interviewAPI.transcribeAudio(uri);
+        const response = await interviewAPI.transcribeAudio(uri, currentLanguage);
 
         if (!response?.success) {
           throw new Error(
@@ -133,6 +135,7 @@ export const useVoiceRecognition = () => {
     },
     [
       audioRecorder,
+      currentLanguage,
       isListening,
       recorderState.isRecording,
     ]

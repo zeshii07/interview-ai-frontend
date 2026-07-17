@@ -217,13 +217,31 @@ const HistoryScreen = () => {
   };
 
   const renderHistoryItem = ({ item, index }) => {
-    const scoreColor = getScoreColor(item.feedback.rating);
+    const score = Number(
+      item.averageScore ?? item.feedback?.rating ?? 0
+    );
+    const date = item.updatedAt || item.timestamp;
+    const scoreColor = getScoreColor(score);
+    const previousComparable = interviewHistory
+      .slice(index + 1)
+      .find(
+        (entry) =>
+          entry.role === item.role &&
+          entry.difficulty === item.difficulty
+      );
+    const previousScore = Number(
+      previousComparable?.averageScore ??
+        previousComparable?.feedback?.rating
+    );
+    const change = Number.isFinite(previousScore)
+      ? Math.round((score - previousScore) * 10) / 10
+      : null;
     
     return (
       <View
         style={styles.cardWrapper}
         accessible
-        accessibilityLabel={`${item.role}, ${item.difficulty} difficulty, scored ${item.feedback.rating} out of ${item.feedback.rating_max}, ${getGradeLabel(item.feedback.rating)}, on ${formatDate(item.timestamp)}`}
+        accessibilityLabel={`${item.role}, ${item.difficulty} difficulty, session average ${score} out of 10, ${getGradeLabel(score)}, on ${formatDate(date)}`}
       >
         {/* Left accent border */}
         <View style={[styles.accentBorder, { backgroundColor: scoreColor }]} />
@@ -239,28 +257,35 @@ const HistoryScreen = () => {
                 <Text style={styles.diffText}>{item.difficulty}</Text>
               </View>
             </View>
-            <Text style={styles.dateText}>{formatDate(item.timestamp)}</Text>
+            <Text style={styles.dateText}>{formatDate(date)}</Text>
           </View>
 
-          {/* Question */}
-          <Text style={styles.questionText} numberOfLines={2}>
-            "{item.question}"
-          </Text>
+          <Text style={styles.sessionLabel}>Session average</Text>
 
           {/* Bottom Row: Score & Grade */}
           <View style={styles.scoreRow}>
             <View style={styles.scoreContainer}>
               <Text style={[styles.scoreNumber, { color: scoreColor }]}>
-                {item.feedback.rating}
+                {score}
               </Text>
-              <Text style={styles.scoreMax}>/ {item.feedback.rating_max}</Text>
+              <Text style={styles.scoreMax}>/ 10</Text>
             </View>
             <View style={[styles.gradePill, { backgroundColor: scoreColor + '20' }]}>
               <Text style={[styles.gradeText, { color: scoreColor }]}>
-                {getGradeLabel(item.feedback.rating)}
+                {getGradeLabel(score)}
               </Text>
             </View>
           </View>
+          {change !== null ? (
+            <Text
+              style={[
+                styles.changeText,
+                { color: change >= 0 ? Colors.success : Colors.error },
+              ]}
+            >
+              {change >= 0 ? '↑' : '↓'} {Math.abs(change)} from your previous matching session
+            </Text>
+          ) : null}
         </View>
       </View>
     );
@@ -348,12 +373,12 @@ const styles = StyleSheet.create({
   diffText: { color: Colors.textMuted, fontSize: FontSizes.xs, fontWeight: '600', textTransform: 'uppercase' },
   dateText: { color: Colors.textMuted, fontSize: FontSizes.xs },
 
-  questionText: { 
+  sessionLabel: {
     color: Colors.textSecondary, 
     fontSize: FontSizes.sm, 
     lineHeight: 20, 
     marginBottom: Spacing.md,
-    fontStyle: 'italic'
+    fontWeight: '700'
   },
 
   scoreRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -362,6 +387,7 @@ const styles = StyleSheet.create({
   scoreMax: { color: Colors.textMuted, fontSize: FontSizes.sm, marginBottom: 4, marginLeft: 2 },
   gradePill: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs, borderRadius: Radius.full },
   gradeText: { fontSize: FontSizes.xs, fontWeight: '800', letterSpacing: 0.5 },
+  changeText: { paddingTop: Spacing.sm, fontSize: FontSizes.xs, fontWeight: '800' },
 
   // Empty State
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: Spacing.xl },
