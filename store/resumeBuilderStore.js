@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const emptyExperience = () => ({
   role: '',
@@ -28,29 +30,49 @@ const emptyCertification = () => ({
   year: '',
 });
 
+const emptyCustomSection = () => ({
+  title: '',
+  content: '',
+});
+
 const initialResume = {
+  templateId: 'ats-classic',
   firstName: '',
   lastName: '',
   email: '',
   phone: '',
   location: '',
   linkedin: '',
+  github: '',
   portfolio: '',
   targetRole: '',
   jobDescription: '',
   summary: '',
+  // Academic-template extras (used only when templateId === 'eu-academic')
+  nationality: '',
+  dateOfBirth: '',
+  placeOfBirth: '',
+  languagesText: '',
+  referencesText: '',
   experience: [emptyExperience()],
   education: [emptyEducation()],
   skillsText: '',
   skills: [],
   projects: [],
   certifications: [],
+  customSections: [],
 };
 
-const useResumeBuilderStore = create((set) => ({
+const useResumeBuilderStore = create(persist((set) => ({
   draft: initialResume,
   optimizedResume: null,
   suggestions: [],
+  builderHydrated: false,
+  // 'ai' = server optimized, 'local' = passed through user input unchanged
+  optimizationMode: null,
+  // human-readable reason set when we fall back to local mode (e.g. server error)
+  optimizationNote: '',
+  setBuilderHydrated: (value) => set({ builderHydrated: Boolean(value) }),
 
   updateDraft: (field, value) =>
     set((state) => ({
@@ -115,6 +137,7 @@ const useResumeBuilderStore = create((set) => ({
         education: emptyEducation,
         projects: emptyProject,
         certifications: emptyCertification,
+        customSections: emptyCustomSection,
       };
 
       return {
@@ -135,10 +158,12 @@ const useResumeBuilderStore = create((set) => ({
       },
     })),
 
-  setOptimizedResult: (resume, suggestions = []) =>
+  setOptimizedResult: (resume, suggestions = [], mode = 'ai', note = '') =>
     set({
       optimizedResume: resume,
       suggestions: Array.isArray(suggestions) ? suggestions : [],
+      optimizationMode: mode,
+      optimizationNote: typeof note === 'string' ? note : '',
     }),
 
   updateOptimizedField: (field, value) =>
@@ -160,7 +185,32 @@ const useResumeBuilderStore = create((set) => ({
       },
       optimizedResume: null,
       suggestions: [],
+      optimizationMode: null,
+      optimizationNote: '',
     }),
+}), {
+  name: '@hirely_resume_builder',
+  storage: createJSONStorage(() => AsyncStorage),
+  partialize: (state) => ({
+    draft: state.draft,
+    optimizedResume: state.optimizedResume,
+    suggestions: state.suggestions,
+    optimizationMode: state.optimizationMode,
+    optimizationNote: state.optimizationNote,
+  }),
+  merge: (persistedState, currentState) => ({
+    ...currentState,
+    ...persistedState,
+    draft: {
+      ...initialResume,
+      ...(persistedState?.draft || {}),
+    },
+  }),
+  onRehydrateStorage: () => (state, error) => {
+    if (error) console.error('Failed to restore resume draft:', error);
+    if (state) state.setBuilderHydrated(true);
+    else setTimeout(() => useResumeBuilderStore.setState({ builderHydrated: true }), 0);
+  },
 }));
 
 export default useResumeBuilderStore;

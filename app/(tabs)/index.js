@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sharing from 'expo-sharing';
 import { router } from 'expo-router';
 import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
@@ -21,6 +22,7 @@ import useInterviewStore from '../../store/interviewStore';
 import { DIFFICULTY_LEVELS } from '../../constants/config';
 import { loadPreferences } from '../../utils/storage';
 import { Colors, Gradients } from '../../constants/theme';
+import ShareCard from '../../components/ui/ShareCard';
 
 const palette = {
   ink: Colors.textPrimary,
@@ -165,12 +167,14 @@ export default function HomeScreen() {
   const setRole = useInterviewStore((state) => state.setRole);
   const setDifficulty = useInterviewStore((state) => state.setDifficulty);
   const setLanguage = useInterviewStore((state) => state.setLanguage);
+  const startNewInterview = useInterviewStore((state) => state.startNewInterview);
   const [userName, setUserName] = React.useState(getCurrentUser()?.displayName?.trim() || '');
   const [setupOpen, setSetupOpen] = React.useState(false);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [role, setRoleInput] = React.useState('');
   const [difficulty, setDifficultyInput] = React.useState('intermediate');
   const [language, setLanguageInput] = React.useState('English');
+  const shareCardRef = React.useRef(null);
 
   React.useEffect(() => {
     const updateName = (user) => setUserName(user?.displayName?.trim() || '');
@@ -211,6 +215,7 @@ export default function HomeScreen() {
     setRole(cleanRole);
     setDifficulty(difficulty);
     setLanguage(language);
+    startNewInterview();
     setSetupOpen(false);
     router.push('/interview/session');
   };
@@ -222,8 +227,35 @@ export default function HomeScreen() {
     ]);
   };
 
+  const shareOverallScore = async () => {
+    if (!ratings.length) {
+      Alert.alert('No score to share', 'Complete an interview first to calculate your overall score.');
+      return;
+    }
+
+    try {
+      const available = await Sharing.isAvailableAsync();
+      if (!available || !shareCardRef.current?.capture) throw new Error('Sharing unavailable');
+      const uri = await shareCardRef.current.capture();
+      await Sharing.shareAsync(uri, { mimeType: 'image/jpeg', dialogTitle: 'Share your Hirely overall score' });
+    } catch {
+      Alert.alert('Unable to share', 'Please try again.');
+    }
+  };
+
   return (
     <View style={styles.screen}>
+      {ratings.length ? (
+        <View style={styles.shareCapture} pointerEvents="none">
+          <ShareCard
+            forwardedRef={shareCardRef}
+            feedback={{ rating: averageScore, rating_max: 10 }}
+            role="Overall interview readiness"
+            overall
+            interviewCount={history.length}
+          />
+        </View>
+      ) : null}
       <View style={styles.backgroundShapeTop} />
       <View style={styles.backgroundShapeRight} />
 
@@ -280,6 +312,15 @@ export default function HomeScreen() {
               <Text style={styles.metricHint}>{ratings.length ? 'Score based on your full history' : 'Complete your first interview to get a score'}</Text>
             </View>
           </View>
+          <Pressable
+            onPress={shareOverallScore}
+            accessibilityRole="button"
+            accessibilityLabel={ratings.length ? `Share overall score ${scoreDisplay} out of 10` : 'Complete an interview before sharing your score'}
+            style={({ pressed }) => [styles.shareScoreButton, pressed && styles.pressed]}
+          >
+            <Ionicons name="share-social-outline" size={18} color={palette.purpleDark} />
+            <Text style={styles.shareScoreText}>Share overall score</Text>
+          </Pressable>
         </View>
 
         <View style={styles.practiceCard}>
@@ -413,6 +454,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '-28deg' }],
   },
   content: { paddingHorizontal: 24, paddingTop: 12, paddingBottom: 38, gap: 24 },
+  shareCapture: { position: 'absolute', left: -5000, top: 0 },
   topBar: { minHeight: 72, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   topActions: { flexDirection: 'row', alignItems: 'center', gap: 3, flex: 1 },
   iconButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22 },
@@ -427,6 +469,8 @@ const styles = StyleSheet.create({
   trendPill: { flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, backgroundColor: palette.lavender, paddingHorizontal: 9, paddingVertical: 7 },
   trendText: { color: palette.purpleDark, fontSize: 10, fontWeight: '800' },
   dashboardBody: { minHeight: 158, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', gap: 24, paddingTop: 10 },
+  shareScoreButton: { minHeight: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderRadius: 13, borderCurve: 'continuous', backgroundColor: palette.lavender, paddingHorizontal: 14 },
+  shareScoreText: { color: palette.purpleDark, fontSize: 13, fontWeight: '800' },
   gauge: { alignItems: 'center', justifyContent: 'center' },
   gaugeSvg: { transform: [{ rotate: '-90deg' }] },
   gaugeContent: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 1, paddingHorizontal: 14 },

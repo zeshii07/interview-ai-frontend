@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Alert,
+  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,6 +17,15 @@ import { router } from 'expo-router';
 import { resumeAPI } from '../../services/api';
 import useResumeBuilderStore from '../../store/resumeBuilderStore';
 import { Colors, Gradients, Radius, Shadows, Spacing } from '../../constants/theme';
+import { saveLastWorkingRoute } from '../../utils/storage';
+
+const RESUME_TEMPLATES = [
+  { id: 'ats-classic', name: 'ATS Classic', description: 'Clean, balanced and suitable for most applications.', icon: 'document-text-outline', accent: '#3567F0', badge: 'Recommended' },
+  { id: 'corporate-professional', name: 'Corporate', description: 'Traditional navy styling for business and large companies.', icon: 'business-outline', accent: '#17365D' },
+  { id: 'european-standard', name: 'European', description: 'A4 chronological layout inspired by European CV conventions.', icon: 'globe-outline', accent: '#005B96' },
+  { id: 'technical-compact', name: 'Technical', description: 'Compact skills-first styling for software and engineering roles.', icon: 'code-slash-outline', accent: '#0F766E' },
+  { id: 'eu-academic', name: 'EU Academic', description: 'Europass-style for university admissions in Germany, France, Netherlands. Includes nationality, DOB, languages with CEFR, references, signature footer.', icon: 'school-outline', accent: '#1A2A4F', badge: 'For students' },
+];
 
 function Field({
   label,
@@ -89,16 +99,26 @@ function cleanText(value) {
 function buildPayload(draft) {
   return {
     ...draft,
+    templateId: RESUME_TEMPLATES.some((item) => item.id === draft.templateId)
+      ? draft.templateId
+      : 'ats-classic',
     firstName: cleanText(draft.firstName),
     lastName: cleanText(draft.lastName),
     email: cleanText(draft.email),
     phone: cleanText(draft.phone),
     location: cleanText(draft.location),
     linkedin: cleanText(draft.linkedin),
+    github: cleanText(draft.github),
     portfolio: cleanText(draft.portfolio),
     targetRole: cleanText(draft.targetRole),
     jobDescription: cleanText(draft.jobDescription),
     summary: cleanText(draft.summary),
+    // Academic-template extras (passed through to PDF renderer as-is)
+    nationality: cleanText(draft.nationality),
+    dateOfBirth: cleanText(draft.dateOfBirth),
+    placeOfBirth: cleanText(draft.placeOfBirth),
+    languagesText: cleanText(draft.languagesText),
+    referencesText: cleanText(draft.referencesText),
     skills: draft.skillsText
       .split(',')
       .map((skill) => skill.trim())
@@ -137,11 +157,18 @@ function buildPayload(draft) {
         year: cleanText(item.year),
       }))
       .filter((item) => item.name),
+    customSections: draft.customSections
+      .map((item) => ({
+        title: cleanText(item.title),
+        content: cleanText(item.content),
+      }))
+      .filter((item) => item.title && item.content),
   };
 }
 
 export default function ResumeGeneratorScreen() {
   const draft = useResumeBuilderStore((state) => state.draft);
+  const builderHydrated = useResumeBuilderStore((state) => state.builderHydrated);
   const updateDraft = useResumeBuilderStore((state) => state.updateDraft);
   const updateArrayItem = useResumeBuilderStore((state) => state.updateArrayItem);
   const updateExperiencePoint = useResumeBuilderStore(
@@ -162,6 +189,22 @@ export default function ResumeGeneratorScreen() {
   );
 
   const [submitting, setSubmitting] = React.useState(false);
+
+  React.useEffect(() => {
+    saveLastWorkingRoute('/resume/generator');
+    return () => {
+      saveLastWorkingRoute(null);
+    };
+  }, []);
+
+  if (!builderHydrated) {
+    return (
+      <View style={styles.restoreScreen}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.restoreText}>Restoring your saved draft…</Text>
+      </View>
+    );
+  }
 
   const generateResume = async () => {
     const payload = buildPayload(draft);
@@ -191,14 +234,45 @@ export default function ResumeGeneratorScreen() {
 
     try {
       setSubmitting(true);
-      const result = await resumeAPI.generate(payload);
-      const optimizedResume = result?.resume || result?.data?.resume;
+      let optimizedResume;
+      let suggestions = [];
+      let mode = 'ai';
+      let note = '';
 
-      if (!optimizedResume) {
-        throw new Error('The server did not return an optimized resume.');
+      try {
+        const result = await resumeAPI.generate(payload);
+        optimizedResume = result?.resume || result?.data?.resume;
+
+        if (!optimizedResume) {
+          throw new Error('The server did not return an optimized resume.');
+        }
+
+        suggestions = Array.isArray(result?.suggestions)
+          ? result.suggestions
+          : [];
+      } catch (aiError) {
+        // Backend / AI optimization failed — fall back to using the user's
+        // raw input as the resume content. The user can still preview and
+        // download a PDF of their data without AI enhancement.
+        console.warn(
+          '[resume/generator] AI optimization failed, falling back to local mode:',
+          aiError?.message || aiError
+        );
+
+        optimizedResume = payload;
+        mode = 'local';
+        note =
+          aiError?.message ||
+          'AI optimization is unavailable right now. Your resume will be generated from the details you entered.';
+
+        Alert.alert(
+          'AI enhancement unavailable',
+          'We could not reach the AI service to polish your resume. Your data has been preserved and you can still preview and download a PDF. Tap "Download PDF" on the next screen to save it.',
+          [{ text: 'Continue' }]
+        );
       }
 
-      setOptimizedResult(optimizedResume, result?.suggestions);
+      setOptimizedResult(optimizedResume, suggestions, mode, note);
       router.push('/resume/preview');
     } catch (error) {
       Alert.alert('Could not generate resume', error.message);
@@ -211,10 +285,12 @@ export default function ResumeGeneratorScreen() {
     <View style={styles.screen}>
       <KeyboardAvoidingView
         style={styles.screen}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
         <ScrollView
+          contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.content}
         >
@@ -236,6 +312,37 @@ export default function ResumeGeneratorScreen() {
                 Add truthful details about your background. Hirely AI will improve
                 the wording without inventing qualifications.
               </Text>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <SectionHeader
+              title="Choose a template"
+              subtitle="Select the resume design before entering your details. All options use ATS-readable text and structure."
+            />
+            <View style={styles.templateGrid}>
+              {RESUME_TEMPLATES.map((template) => {
+                const selected = draft.templateId === template.id;
+                return (
+                  <Pressable
+                    key={template.id}
+                    accessibilityRole="radio"
+                    accessibilityState={{ checked: selected }}
+                    onPress={() => updateDraft('templateId', template.id)}
+                    style={({ pressed }) => [styles.templateCard, selected && styles.templateCardSelected, pressed && styles.buttonPressed]}
+                  >
+                    <View style={[styles.templateIcon, { backgroundColor: `${template.accent}14` }]}>
+                      <Ionicons name={template.icon} size={22} color={template.accent} />
+                    </View>
+                    <View style={styles.templateTitleRow}>
+                      <Text style={styles.templateName}>{template.name}</Text>
+                      {selected ? <Ionicons name="checkmark-circle" size={20} color={template.accent} /> : null}
+                    </View>
+                    {template.badge ? <Text style={styles.templateBadge}>{template.badge}</Text> : null}
+                    <Text style={styles.templateDescription}>{template.description}</Text>
+                  </Pressable>
+                );
+              })}
             </View>
           </View>
 
@@ -294,10 +401,17 @@ export default function ResumeGeneratorScreen() {
               autoCapitalize="none"
             />
             <Field
-              label="PORTFOLIO OR GITHUB"
+              label="GITHUB (OPTIONAL)"
+              value={draft.github}
+              onChangeText={(value) => updateDraft('github', value)}
+              placeholder="github.com/your-name"
+              autoCapitalize="none"
+            />
+            <Field
+              label="PORTFOLIO (OPTIONAL)"
               value={draft.portfolio}
               onChangeText={(value) => updateDraft('portfolio', value)}
-              placeholder="github.com/your-name"
+              placeholder="yourportfolio.com"
               autoCapitalize="none"
             />
           </View>
@@ -330,6 +444,63 @@ export default function ResumeGeneratorScreen() {
             />
           </View>
 
+          {draft.templateId === 'eu-academic' ? (
+            <View style={styles.section}>
+              <SectionHeader
+                title="Academic admission details"
+                subtitle="Used by the EU Academic template. Required by universities in Germany, France, and the Netherlands for international admission applications."
+              />
+              <View style={styles.aiHint}>
+                <Ionicons name="school-outline" size={15} color={Colors.primary} />
+                <Text style={styles.aiHintText}>
+                  These fields appear on the PDF only when EU Academic is selected.
+                  Nationality, date of birth, and place of birth are expected by
+                  EU universities. Use CEFR levels (A1–C2) for languages.
+                </Text>
+              </View>
+              <Field
+                label="NATIONALITY"
+                value={draft.nationality}
+                onChangeText={(value) => updateDraft('nationality', value)}
+                placeholder="Pakistani"
+                autoCapitalize="words"
+              />
+              <View style={styles.twoColumns}>
+                <View style={styles.column}>
+                  <Field
+                    label="DATE OF BIRTH"
+                    value={draft.dateOfBirth}
+                    onChangeText={(value) => updateDraft('dateOfBirth', value)}
+                    placeholder="15 March 2001"
+                  />
+                </View>
+                <View style={styles.column}>
+                  <Field
+                    label="PLACE OF BIRTH"
+                    value={draft.placeOfBirth}
+                    onChangeText={(value) => updateDraft('placeOfBirth', value)}
+                    placeholder="Lahore, Pakistan"
+                    autoCapitalize="words"
+                  />
+                </View>
+              </View>
+              <Field
+                label="LANGUAGES (ONE PER LINE, WITH CEFR LEVEL)"
+                value={draft.languagesText}
+                onChangeText={(value) => updateDraft('languagesText', value)}
+                placeholder={'English — C1 (IELTS 7.5)\nGerman — B1 (Goethe-Zertifikat)\nUrdu — Native'}
+                multiline
+              />
+              <Field
+                label="REFERENCES"
+                value={draft.referencesText}
+                onChangeText={(value) => updateDraft('referencesText', value)}
+                placeholder={'Available on request.\n\n—or—\n\nDr. Ahmad Hassan\nProfessor, FAST University\nahmad@uni.edu'}
+                multiline
+              />
+            </View>
+          ) : null}
+
           <View style={styles.section}>
             <SectionHeader
               title="Work experience"
@@ -337,6 +508,12 @@ export default function ResumeGeneratorScreen() {
               onAdd={() => addSectionItem('experience')}
               addLabel="Experience"
             />
+            <View style={styles.aiHint}>
+              <Ionicons name="sparkles" size={15} color={Colors.primary} />
+              <Text style={styles.aiHintText}>
+                Enter rough but truthful facts. AI will turn short phrases into professional ATS-ready bullets without inventing achievements.
+              </Text>
+            </View>
             {draft.experience.map((item, index) => (
               <ItemCard
                 key={`experience-${index}`}
@@ -503,6 +680,12 @@ export default function ResumeGeneratorScreen() {
               onAdd={() => addSectionItem('projects')}
               addLabel="Project"
             />
+            <View style={styles.aiHint}>
+              <Ionicons name="construct-outline" size={15} color={Colors.primary} />
+              <Text style={styles.aiHintText}>
+                Mention what you built, your contribution, and technologies used. AI will polish the wording.
+              </Text>
+            </View>
             {draft.projects.map((item, index) => (
               <ItemCard
                 key={`project-${index}`}
@@ -586,6 +769,45 @@ export default function ResumeGeneratorScreen() {
             ) : null}
           </View>
 
+          <View style={styles.section}>
+            <SectionHeader
+              title="Additional sections"
+              subtitle="Optional sections such as Awards, Languages, Volunteering, Publications, or Interests."
+              onAdd={() => addSectionItem('customSections')}
+              addLabel="Section"
+            />
+            {draft.customSections.map((item, index) => (
+              <ItemCard
+                key={`custom-section-${index}`}
+                title={`Additional section ${index + 1}`}
+                canRemove
+                onRemove={() => removeSectionItem('customSections', index)}
+              >
+                <Field
+                  label="SECTION TITLE"
+                  value={item.title}
+                  onChangeText={(value) =>
+                    updateArrayItem('customSections', index, 'title', value)
+                  }
+                  placeholder="Awards and Achievements"
+                  autoCapitalize="words"
+                />
+                <Field
+                  label="DETAILS"
+                  value={item.content}
+                  onChangeText={(value) =>
+                    updateArrayItem('customSections', index, 'content', value)
+                  }
+                  placeholder="Add truthful details. Use a new line for each item."
+                  multiline
+                />
+              </ItemCard>
+            ))}
+            {!draft.customSections.length ? (
+              <Text style={styles.emptyText}>No additional sections added.</Text>
+            ) : null}
+          </View>
+
           <Pressable
             disabled={submitting}
             onPress={generateResume}
@@ -600,13 +822,15 @@ export default function ResumeGeneratorScreen() {
               color="#FFFFFF"
             />
             <Text style={styles.generateButtonText}>
-              {submitting ? 'Optimizing your resume...' : 'Generate ATS Resume'}
+              {submitting ? 'Optimizing your resume...' : 'Generate Resume'}
             </Text>
           </Pressable>
 
           <Text style={styles.disclaimer}>
-            Review the AI output carefully before downloading. Hirely improves
-            wording but should not be used to add false experience or credentials.
+            Review the AI output carefully before downloading. If the AI
+            service is unreachable, your resume is still generated from the
+            details you entered. Hirely improves wording but should not be
+            used to add false experience or credentials.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -616,6 +840,8 @@ export default function ResumeGeneratorScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, ...Gradients.screen },
+  restoreScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, ...Gradients.screen },
+  restoreText: { color: Colors.textSecondary, fontSize: 13 },
   content: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
@@ -795,6 +1021,28 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     fontSize: 13,
     fontStyle: 'italic',
+  },
+  templateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  templateCard: { width: '48%', minHeight: 166, gap: 7, padding: 13, borderRadius: Radius.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.bgElevated },
+  templateCardSelected: { borderWidth: 2, borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
+  templateIcon: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 12 },
+  templateTitleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 },
+  templateName: { flex: 1, color: Colors.textPrimary, fontSize: 14, fontWeight: '900' },
+  templateBadge: { color: Colors.primaryDark, fontSize: 9, fontWeight: '900' },
+  templateDescription: { color: Colors.textMuted, fontSize: 11, lineHeight: 16 },
+  aiHint: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 11,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primaryBg,
+  },
+  aiHintText: {
+    flex: 1,
+    color: Colors.textSecondary,
+    fontSize: 11,
+    lineHeight: 17,
   },
   generateButton: {
     minHeight: 60,

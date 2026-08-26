@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -8,6 +8,7 @@ import * as Sharing from 'react-native';
 import LoadingOverlay from '../../components/ui/LoadingOverlay';
 import useInterviewStore from '../../store/interviewStore';
 import { Colors, Gradients } from '../../constants/theme';
+import { saveLastWorkingRoute } from '../../utils/storage';
 
 const p = { ink: Colors.textPrimary, muted: Colors.textMuted, purple: '#7047F5', dark: '#5330DB', lavender: Colors.primaryBg, line: Colors.border, bg: Colors.bgPrimary, card: Colors.bgCard, green: '#169B70', amber: '#B86D12', red: '#C84A59' };
 
@@ -19,10 +20,21 @@ function InsightCard({ icon, title, tone = 'purple', items = [] }) {
 }
 
 export default function ResumeAnalyzeScreen() {
-  const [file, setFile] = useState(null);
-  const [jobDescription, setJobDescription] = useState('');
-  const [analysis, setAnalysis] = useState(null);
-  const { isAnalyzingResume, analyzeResume } = useInterviewStore();
+  const {
+    isAnalyzingResume,
+    analyzeResume,
+    resumeAnalysisFile: file,
+    resumeAnalysisJobDescription: jobDescription,
+    resumeAnalysisResult: analysis,
+    setResumeAnalysisFile: setFile,
+    setResumeAnalysisJobDescription: setJobDescription,
+    setResumeAnalysisResult: setAnalysis,
+  } = useInterviewStore();
+
+  React.useEffect(() => {
+    saveLastWorkingRoute('/resume/analyze');
+    return () => saveLastWorkingRoute(null);
+  }, []);
 
   const pickResume = async () => {
     const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'], copyToCacheDirectory: true, multiple: false });

@@ -6,20 +6,23 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
-import * as Linking from 'expo-linking';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sharing from 'expo-sharing';
+import { router } from 'expo-router';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
-import LoadingOverlay from '../../components/ui/LoadingOverlay';
+import InterviewSimulationOverlay from '../../components/ui/interview-simulation-overlay';
 import ScoreRing from '../../components/ui/ScoreRing';
+import ShareCard from '../../components/ui/ShareCard';
 import { useVoiceRecognition } from '../../hooks/useVoiceRecognition';
 import useInterviewStore from '../../store/interviewStore';
 import { Colors, Gradients } from '../../constants/theme';
+import { saveLastWorkingRoute } from '../../utils/storage';
 
 const palette = {
   ink: Colors.textPrimary,
@@ -174,6 +177,8 @@ export default function InterviewSession() {
     currentQuestion,
     currentAnswer,
     currentFeedback,
+    currentQuestionStartedAt,
+    sessionHydrated,
     isGeneratingQuestion,
     isEvaluating,
     error,
@@ -189,6 +194,7 @@ export default function InterviewSession() {
   const [timeRemaining, setTimeRemaining] = useState(90);
   const [isAnswerFocused, setIsAnswerFocused] = useState(false);
   const scrollViewRef = useRef(null);
+  const shareCardRef = useRef(null);
   const answerSectionY = useRef(0);
 
   const keepAnswerVisible = () => {
@@ -259,22 +265,40 @@ export default function InterviewSession() {
   };
 
   useEffect(() => {
-    handleNewQuestion('mixed', { newInterview: true });
+    saveLastWorkingRoute('/interview/session');
+    return () => {
+      saveLastWorkingRoute(null);
+    };
   }, []);
 
   useEffect(() => {
-    if (!questionText) return undefined;
+    if (!sessionHydrated) return;
+    if (!currentRole) {
+      router.replace('/(tabs)');
+      return;
+    }
+    if (!currentQuestion && !currentFeedback) {
+      handleNewQuestion('mixed');
+    }
+  }, [sessionHydrated]);
 
-    setTimeRemaining(suggestedSeconds);
+  useEffect(() => {
+    if (!questionText || currentFeedback) return undefined;
+
+    const startedAt = Number(currentQuestionStartedAt) || Date.now();
+    const updateRemainingTime = () => {
+      const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+      setTimeRemaining(Math.max(0, suggestedSeconds - elapsedSeconds));
+    };
+
+    updateRemainingTime();
 
     const interval = setInterval(() => {
-      setTimeRemaining((value) =>
-        value > 0 ? value - 1 : 0
-      );
+      updateRemainingTime();
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [questionText, suggestedSeconds]);
+  }, [currentFeedback, currentQuestionStartedAt, questionText, suggestedSeconds]);
 
   useEffect(() => {
     setShowTips(false);
@@ -296,38 +320,15 @@ export default function InterviewSession() {
     if (!currentFeedback) return;
 
     try {
-      await Share.share({
-        message: `I scored ${
-          currentFeedback.rating
-        }/${
-          currentFeedback.rating_max || 10
-        } in my ${currentRole} AI interview practice with Hirely.`,
-      });
+      const available = await Sharing.isAvailableAsync();
+      if (!available || !shareCardRef.current?.capture) throw new Error('Sharing unavailable');
+      const uri = await shareCardRef.current.capture();
+      await Sharing.shareAsync(uri, { mimeType: 'image/jpeg', dialogTitle: 'Share your Hirely interview result' });
     } catch {
       Alert.alert(
         'Unable to share',
         'Please try again.'
       );
-    }
-  };
-
-  const handleLinkedInShare = async () => {
-    if (!currentFeedback) return;
-
-    const text = `I scored ${
-      currentFeedback.rating
-    }/${
-      currentFeedback.rating_max || 10
-    } in my ${currentRole} AI interview practice with Hirely.`;
-
-    const linkedInUrl =
-      `https://www.linkedin.com/feed/?shareActive=true&text=` +
-      encodeURIComponent(text);
-
-    try {
-      await Linking.openURL(linkedInUrl);
-    } catch {
-      await handleShare();
     }
   };
 
@@ -349,13 +350,17 @@ export default function InterviewSession() {
       }
       keyboardVerticalOffset={0}
     >
-      {isLoading ? (
-        <LoadingOverlay
-          message={
-            isGeneratingQuestion
-              ? 'Creating your question…'
-              : 'Preparing your AI review…'
-          }
+      {currentFeedback ? (
+        <View style={styles.shareCapture} pointerEvents="none">
+          <ShareCard forwardedRef={shareCardRef} feedback={currentFeedback} role={currentRole} question={questionText} />
+        </View>
+      ) : null}
+      {isLoading || !sessionHydrated ? (
+        <InterviewSimulationOverlay
+          phase={isEvaluating ? 'evaluation' : 'question'}
+          role={currentRole || 'professional'}
+          difficulty={currentDifficulty || 'adaptive'}
+          language={currentLanguage || 'English'}
         />
       ) : null}
 
@@ -408,6 +413,17 @@ export default function InterviewSession() {
           </View>
         </View>
 
+        <Animated.View entering={FadeInDown.duration(220)} style={styles.simulationBar}>
+          <View style={styles.simulationLive}>
+            <View style={styles.simulationDot} />
+            <Text style={styles.simulationLiveText}>LIVE SIMULATION</Text>
+          </View>
+          <Text style={styles.simulationStage}>
+            {currentFeedback ? 'Performance review' : currentQuestion ? 'Interview in progress' : 'Initializing session'}
+          </Text>
+          <Ionicons name="radio-outline" size={17} color={palette.purple} />
+        </Animated.View>
+
         <Text style={styles.difficultyHint}>
           {DIFFICULTY_DESCRIPTIONS[currentDifficulty] ||
             DIFFICULTY_DESCRIPTIONS.intermediate}
@@ -418,10 +434,10 @@ export default function InterviewSession() {
             <View style={styles.introRow}>
               <View style={styles.introCopy}>
                 <Text style={styles.eyebrow}>
-                  AI INTERVIEW PRACTICE
+                  PROFESSIONAL INTERVIEW SIMULATOR
                 </Text>
                 <Text style={styles.pageTitle}>
-                  Show your best thinking
+                  Your interview is in progress
                 </Text>
               </View>
 
@@ -460,7 +476,7 @@ export default function InterviewSession() {
             </View>
 
             {currentQuestion ? (
-              <View style={styles.questionCard}>
+              <Animated.View entering={FadeInUp.duration(260)} style={styles.questionCard}>
                 <View style={styles.questionTopRow}>
                   <View style={styles.questionHeader}>
                     <View style={styles.questionIcon}>
@@ -566,7 +582,7 @@ export default function InterviewSession() {
                     ) : null}
                   </>
                 ) : null}
-              </View>
+              </Animated.View>
             ) : null}
 
             <View
@@ -708,7 +724,7 @@ export default function InterviewSession() {
                 ]}
               >
                 <Text style={styles.primaryButtonText}>
-                  Review my answer
+                  Submit response
                 </Text>
                 <Ionicons
                   name="arrow-forward"
@@ -719,7 +735,7 @@ export default function InterviewSession() {
             </View>
           </>
         ) : (
-          <View style={styles.feedbackContainer}>
+          <Animated.View entering={FadeInDown.duration(260)} style={styles.feedbackContainer}>
             <View style={styles.feedbackHero}>
               <View style={styles.feedbackGlow} />
               <ScoreRing
@@ -736,7 +752,7 @@ export default function InterviewSession() {
                     color="#C6B8FF"
                   />
                   <Text style={styles.reviewPillText}>
-                    AI REVIEW
+                    ASSESSMENT REPORT
                   </Text>
                 </View>
 
@@ -867,7 +883,7 @@ export default function InterviewSession() {
               </Pressable>
 
               <Pressable
-                onPress={handleLinkedInShare}
+                onPress={handleShare}
                 style={({ pressed }) => [
                   styles.secondaryButton,
                   styles.fullButton,
@@ -875,16 +891,16 @@ export default function InterviewSession() {
                 ]}
               >
                 <Ionicons
-                  name="logo-linkedin"
+                  name="share-social-outline"
                   size={19}
-                  color="#0A66C2"
+                  color={palette.purpleDark}
                 />
                 <Text style={styles.secondaryButtonText}>
-                  Share to LinkedIn
+                  Share your result
                 </Text>
               </Pressable>
             </View>
-          </View>
+          </Animated.View>
         )}
 
         {error ? (
@@ -917,11 +933,17 @@ const styles = StyleSheet.create({
     paddingBottom: 52,
     gap: 20,
   },
+  shareCapture: { position: 'absolute', left: -5000, top: 0 },
   metaRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
+  simulationBar: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 9, borderRadius: 14, borderCurve: 'continuous', borderWidth: 1, borderColor: '#DCD3FF', backgroundColor: 'rgba(244,240,255,0.94)', paddingHorizontal: 12 },
+  simulationLive: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  simulationDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#19A974' },
+  simulationLiveText: { color: palette.purpleDark, fontSize: 8, fontWeight: '900', letterSpacing: 0.9 },
+  simulationStage: { flex: 1, color: palette.ink, fontSize: 11, fontWeight: '700', textAlign: 'right' },
   metaPill: {
     maxWidth: '100%',
     minHeight: 34,

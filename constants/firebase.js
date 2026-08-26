@@ -1,5 +1,5 @@
-import { initializeApp } from 'firebase/app';
-import { initializeAuth, getReactNativePersistence } from 'firebase/auth';
+import { getApp, getApps, initializeApp } from 'firebase/app';
+import { getAuth, initializeAuth, getReactNativePersistence } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -14,7 +14,7 @@ const firebaseConfig = {
   databaseURL: "https://hirely-8f434-default-rtdb.firebaseio.com"
 };
 
-const app = initializeApp(firebaseConfig);
+const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 const db = getDatabase(app);
 
 let auth;
@@ -27,7 +27,11 @@ try {
     auth = initializeAuth(app); 
   }
 } catch (error) {
-  auth = initializeAuth(app); 
+  if (error?.code === 'auth/already-initialized') {
+    auth = getAuth(app);
+  } else {
+    throw error;
+  }
 }
 
 export { auth, db };

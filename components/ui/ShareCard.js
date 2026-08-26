@@ -18,7 +18,7 @@ const Metric = ({ label, value }) => (
   </View>
 );
 
-const ShareCard = ({ feedback = {}, role = 'Interview practice', forwardedRef }) => {
+const ShareCard = ({ feedback = {}, role = 'Interview practice', forwardedRef, question, overall = false, interviewCount = 0 }) => {
   const rating = Number(feedback.rating) || 0;
   const maxRating = Number(feedback.rating_max) || 10;
   const grade = getGrade(rating);
@@ -47,7 +47,7 @@ const ShareCard = ({ feedback = {}, role = 'Interview practice', forwardedRef })
         <View style={styles.heroSection}>
           <ScoreRing score={rating} maxScore={maxRating} size={132} strokeWidth={10} />
           <View style={styles.heroCopy}>
-            <Text style={styles.eyebrow}>INTERVIEW PERFORMANCE</Text>
+            <Text style={styles.eyebrow}>{overall ? 'OVERALL PERFORMANCE' : 'INTERVIEW PERFORMANCE'}</Text>
             <Text style={[styles.gradeLabel, { color: grade.tone }]}>{grade.label}</Text>
             <Text style={styles.encouragement}>
               Focused practice is turning into stronger, clearer answers.
@@ -55,22 +55,33 @@ const ShareCard = ({ feedback = {}, role = 'Interview practice', forwardedRef })
           </View>
         </View>
 
+        <Text style={styles.socialCaption}>
+          {overall
+            ? 'Building interview confidence one focused practice session at a time.'
+            : 'I am sharpening my interview skills through realistic AI-powered practice.'}
+        </Text>
+
         <View style={styles.roleCard}>
-          <Text style={styles.roleLabel}>TARGET ROLE</Text>
+          <Text style={styles.roleLabel}>{overall ? 'PROGRESS SUMMARY' : 'TARGET ROLE'}</Text>
           <Text style={styles.roleText} numberOfLines={2}>{role}</Text>
+          {overall ? <Text style={styles.contextText}>{interviewCount} {interviewCount === 1 ? 'interview' : 'interviews'} completed</Text> : null}
+          {!overall && question ? <Text style={styles.contextText} numberOfLines={3}>Question: {question}</Text> : null}
         </View>
 
-        <View style={styles.metricsCard}>
+        {!overall ? <View style={styles.metricsCard}>
           <Metric label="Structure" value={feedback.structure_score} />
           <View style={styles.divider} />
           <Metric label="Content" value={feedback.content_score} />
           <View style={styles.divider} />
           <Metric label="Clarity" value={feedback.communication_score} />
-        </View>
+        </View> : null}
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Practice smarter. Interview stronger.</Text>
-          <Text style={styles.footerUrl}>hirely.app</Text>
+          <View style={styles.footerCopy}>
+            <Text style={styles.footerText}>Practice smarter. Interview stronger.</Text>
+            <Text style={styles.promoText}>Install Hirely for AI-powered job preparation sessions.</Text>
+          </View>
+          <Text style={styles.footerUrl}>HIRELY</Text>
         </View>
       </View>
     </ViewShot>
@@ -193,6 +204,8 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 5,
   },
+  socialCaption: { color: Colors.textPrimary, fontSize: 12, lineHeight: 18, fontWeight: '700', textAlign: 'center', marginBottom: Spacing.md },
+  contextText: { color: Colors.textSecondary, fontSize: 10, lineHeight: 15, marginTop: 7 },
   metricsCard: {
     alignItems: 'center',
     flexDirection: 'row',
@@ -232,10 +245,12 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     paddingTop: Spacing.md,
   },
+  footerCopy: { flex: 1, paddingRight: 10 },
   footerText: {
     color: Colors.textMuted,
     fontSize: FontSizes.xs,
   },
+  promoText: { color: Colors.textSecondary, fontSize: 9, lineHeight: 14, fontWeight: '700', marginTop: 3 },
   footerUrl: {
     color: Colors.primaryLight || Colors.primary,
     fontSize: FontSizes.xs,

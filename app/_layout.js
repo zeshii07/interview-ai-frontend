@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Stack } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
@@ -13,8 +13,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { Ionicons } from '@expo/vector-icons';
 
 import { Colors } from '../constants/theme';
-import { onAuthChange } from '../services/authService';
-import { checkOnboardingSeen } from '../utils/storage';
+import { clearSignedOutLocalState, onAuthChange } from '../services/authService';
+import { checkOnboardingSeen, loadLastWorkingRoute } from '../utils/storage';
 
 import LoginScreen from './(auth)/login';
 import OnboardingScreen from './(auth)/onboarding';
@@ -34,17 +34,25 @@ export default function RootLayout() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [user, setUser] = useState(null);
   const [startupError, setStartupError] = useState(null);
+  const [lastWorkingRoute, setLastWorkingRoute] = useState(null);
+  const [routeRestoreHandled, setRouteRestoreHandled] = useState(false);
+  const initialAuthHandled = useRef(false);
+  const restoreEligible = useRef(false);
 
   useEffect(() => {
     let mounted = true;
 
     const loadStoredState = async () => {
       try {
-        const seen = await checkOnboardingSeen();
+        const [seen, savedRoute] = await Promise.all([
+          checkOnboardingSeen(),
+          loadLastWorkingRoute(),
+        ]);
         Appearance.setColorScheme('light');
 
         if (mounted) {
           setShowOnboarding(!seen);
+          setLastWorkingRoute(savedRoute);
         }
       } catch (error) {
         console.error('Failed to load onboarding state:', error);
@@ -72,7 +80,15 @@ export default function RootLayout() {
     let unsubscribe;
 
     try {
-      unsubscribe = onAuthChange((currentUser) => {
+      unsubscribe = onAuthChange(async (currentUser) => {
+        if (!initialAuthHandled.current) {
+          initialAuthHandled.current = true;
+          restoreEligible.current = Boolean(currentUser);
+        }
+        if (!currentUser) {
+          await clearSignedOutLocalState();
+          setLastWorkingRoute(null);
+        }
         setUser(currentUser);
         setAuthReady(true);
       });
@@ -82,14 +98,7 @@ export default function RootLayout() {
       setAuthReady(true);
     }
 
-    // Prevent permanent splash screen if Firebase does not respond.
-    const fallbackTimer = setTimeout(() => {
-      setAuthReady(true);
-    }, 8000);
-
     return () => {
-      clearTimeout(fallbackTimer);
-
       if (typeof unsubscribe === 'function') {
         unsubscribe();
       }
@@ -108,6 +117,15 @@ export default function RootLayout() {
       console.warn('Could not hide splash screen:', error);
     });
   }, [appIsReady]);
+
+  useEffect(() => {
+    if (!appIsReady || !user || routeRestoreHandled || !restoreEligible.current) return;
+
+    setRouteRestoreHandled(true);
+    if (lastWorkingRoute) {
+      router.replace(lastWorkingRoute);
+    }
+  }, [appIsReady, lastWorkingRoute, routeRestoreHandled, user]);
 
   if (!appIsReady) {
     return (
@@ -131,7 +149,7 @@ export default function RootLayout() {
           style="dark"
           backgroundColor={Colors.bgPrimary}
         />
-        <OnboardingScreen />
+        <OnboardingScreen onComplete={() => setShowOnboarding(false)} />
       </>
     );
   }

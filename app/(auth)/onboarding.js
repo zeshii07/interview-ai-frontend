@@ -198,7 +198,7 @@ const slides = [
   },
 ];
 
-const OnboardingScreen = () => {
+const OnboardingScreen = ({ onComplete }) => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const insets = useSafeAreaInsets();
 
@@ -216,6 +216,7 @@ const OnboardingScreen = () => {
 
   const handleFinish = async () => {
     await setOnboardingSeen();
+    onComplete?.();
     router.replace('/(tabs)'); // Go to home and remove onboarding from history
   };
 

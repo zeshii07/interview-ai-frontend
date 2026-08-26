@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { interviewAPI } from '../services/api';
 import { saveHistory, loadHistory } from '../utils/storage';
@@ -30,13 +32,14 @@ const compactHistoryItem = (item) => {
   };
 };
 
-const useInterviewStore = create((set, get) => ({
+const useInterviewStore = create(persist((set, get) => ({
   currentRole: null,
   currentDifficulty: 'intermediate',
   currentLanguage: 'English',
   currentQuestion: null,
   currentAnswer: '',
   currentFeedback: null,
+  currentQuestionStartedAt: null,
   sessionQuestions: [],
   currentSessionId: null,
   sessionScoreTotal: 0,
@@ -50,8 +53,13 @@ const useInterviewStore = create((set, get) => ({
   interviewHistory: [],
   userId: null,
   questionBank: [],
+  resumeAnalysisFile: null,
+  resumeAnalysisJobDescription: '',
+  resumeAnalysisResult: null,
 
   error: null,
+  sessionHydrated: false,
+  setSessionHydrated: (value) => set({ sessionHydrated: Boolean(value) }),
 
   setRole: (role) => set({ currentRole: role }),
   setDifficulty: (difficulty) =>
@@ -60,6 +68,9 @@ const useInterviewStore = create((set, get) => ({
     set({ currentLanguage: language }),
   setAnswer: (answer) => set({ currentAnswer: answer }),
   clearError: () => set({ error: null }),
+  setResumeAnalysisFile: (file) => set({ resumeAnalysisFile: file, resumeAnalysisResult: null }),
+  setResumeAnalysisJobDescription: (value) => set({ resumeAnalysisJobDescription: value }),
+  setResumeAnalysisResult: (result) => set({ resumeAnalysisResult: result }),
 
   initializeApp: async (userId) => {
     set({
@@ -137,6 +148,7 @@ const useInterviewStore = create((set, get) => ({
       currentQuestion: null,
       currentAnswer: '',
       currentFeedback: null,
+      currentQuestionStartedAt: null,
       sessionQuestions: [],
       error: null,
     }),
@@ -197,6 +209,7 @@ const useInterviewStore = create((set, get) => ({
 
       set((current) => ({
         currentQuestion: nextQuestion,
+        currentQuestionStartedAt: Date.now(),
         sessionQuestions: [
           ...current.sessionQuestions,
           nextQuestion,
@@ -431,6 +444,7 @@ const useInterviewStore = create((set, get) => ({
       currentQuestion: null,
       currentAnswer: '',
       currentFeedback: null,
+      currentQuestionStartedAt: null,
       error: null,
     }),
 
@@ -441,6 +455,29 @@ const useInterviewStore = create((set, get) => ({
       currentQuestion: null,
       currentAnswer: '',
       currentFeedback: null,
+      currentQuestionStartedAt: null,
+      error: null,
+    }),
+
+  clearUserState: () =>
+    set({
+      currentRole: null,
+      currentDifficulty: 'intermediate',
+      currentLanguage: 'English',
+      currentQuestion: null,
+      currentQuestionStartedAt: null,
+      currentAnswer: '',
+      currentFeedback: null,
+      sessionQuestions: [],
+      currentSessionId: null,
+      sessionScoreTotal: 0,
+      sessionAnswerCount: 0,
+      interviewHistory: [],
+      questionBank: [],
+      resumeAnalysisFile: null,
+      resumeAnalysisJobDescription: '',
+      resumeAnalysisResult: null,
+      userId: null,
       error: null,
     }),
 
@@ -449,6 +486,30 @@ const useInterviewStore = create((set, get) => ({
     await saveHistory([], userId);
     if (userId) await deleteCloudHistory(userId);
     set({ interviewHistory: [] });
+  },
+}), {
+  name: '@hirely_interview_session',
+  storage: createJSONStorage(() => AsyncStorage),
+  partialize: (state) => ({
+    currentRole: state.currentRole,
+    currentDifficulty: state.currentDifficulty,
+    currentLanguage: state.currentLanguage,
+    currentQuestion: state.currentQuestion,
+    currentQuestionStartedAt: state.currentQuestionStartedAt,
+    currentAnswer: state.currentAnswer,
+    currentFeedback: state.currentFeedback,
+    sessionQuestions: state.sessionQuestions,
+    currentSessionId: state.currentSessionId,
+    sessionScoreTotal: state.sessionScoreTotal,
+    sessionAnswerCount: state.sessionAnswerCount,
+    resumeAnalysisFile: state.resumeAnalysisFile,
+    resumeAnalysisJobDescription: state.resumeAnalysisJobDescription,
+    resumeAnalysisResult: state.resumeAnalysisResult,
+  }),
+  onRehydrateStorage: () => (state, error) => {
+    if (error) console.error('Failed to restore interview session:', error);
+    if (state) state.setSessionHydrated(true);
+    else setTimeout(() => useInterviewStore.setState({ sessionHydrated: true }), 0);
   },
 }));
 

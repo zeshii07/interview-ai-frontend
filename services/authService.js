@@ -1,5 +1,8 @@
 import { auth } from '../constants/firebase';
 import { deleteCloudHistory } from './historyService';
+import useResumeBuilderStore from '../store/resumeBuilderStore';
+import useInterviewStore from '../store/interviewStore';
+import { clearPrivateWorkingState } from '../utils/storage';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword, 
@@ -16,6 +19,19 @@ import {
 } from 'firebase/auth';
 
 const profileListeners = new Set();
+
+const waitForHydration = (store) => {
+  if (store.persist?.hasHydrated?.()) return Promise.resolve();
+  return new Promise((resolve) => {
+    let unsubscribe;
+    const finish = () => {
+      unsubscribe?.();
+      resolve();
+    };
+    unsubscribe = store.persist?.onFinishHydration?.(finish);
+    if (!unsubscribe || store.persist?.hasHydrated?.()) finish();
+  });
+};
 
 // Register with Name
 export const registerUser = async (email, password, displayName) => {
@@ -72,6 +88,7 @@ export const signInWithGoogle = async (idToken, accessToken) => {
 export const logoutUser = async () => {
   try {
     await signOut(auth);
+    await clearSignedOutLocalState();
     return { success: true };
   } catch (error) {
     return { success: false, error: 'Logout failed.' };
@@ -81,6 +98,16 @@ export const logoutUser = async () => {
 // Auth Listener
 export const onAuthChange = (callback) => {
   return onAuthStateChanged(auth, callback);
+};
+
+export const clearSignedOutLocalState = async () => {
+  await Promise.all([
+    waitForHydration(useResumeBuilderStore),
+    waitForHydration(useInterviewStore),
+  ]);
+  useResumeBuilderStore.getState().resetBuilder();
+  useInterviewStore.getState().clearUserState();
+  await clearPrivateWorkingState();
 };
 
 export const getCurrentUser = () => auth.currentUser;
@@ -95,6 +122,7 @@ export const deleteCurrentAccount = async (password) => {
   }
   await deleteCloudHistory(user.uid);
   await deleteUser(user);
+  await clearSignedOutLocalState();
 };
 
 export const onProfileChange = (callback) => {

@@ -6,6 +6,9 @@ const KEYS = {
   FAVORITES: '@hirely_favorites',
   ONBOARDING: '@hirely_onboarding_seen',
   PREFERENCES: '@hirely_preferences',
+  LAST_WORKING_ROUTE: '@hirely_last_working_route',
+  RESUME_BUILDER: '@hirely_resume_builder',
+  INTERVIEW_SESSION: '@hirely_interview_session',
 };
 
 export const DEFAULT_PREFERENCES = { language: 'English', acceptedTerms: false };
@@ -101,8 +104,46 @@ export const clearAllData = async () => {
       KEYS.FAVORITES,
       KEYS.ONBOARDING,
       KEYS.PREFERENCES,
+      KEYS.LAST_WORKING_ROUTE,
+      KEYS.RESUME_BUILDER,
+      KEYS.INTERVIEW_SESSION,
     ]);
   } catch (error) {
     console.error('Failed to clear data');
+  }
+};
+
+export const loadLastWorkingRoute = async () => {
+  try {
+    const route = await AsyncStorage.getItem(KEYS.LAST_WORKING_ROUTE);
+    return ['/resume/generator', '/resume/preview', '/resume/analyze', '/interview/session'].includes(route)
+      ? route
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveLastWorkingRoute = async (route) => {
+  try {
+    if (['/resume/generator', '/resume/preview', '/resume/analyze', '/interview/session'].includes(route)) {
+      await AsyncStorage.setItem(KEYS.LAST_WORKING_ROUTE, route);
+    } else {
+      await AsyncStorage.removeItem(KEYS.LAST_WORKING_ROUTE);
+    }
+  } catch (error) {
+    console.error('Failed to save the active working screen:', error);
+  }
+};
+
+export const clearPrivateWorkingState = async () => {
+  try {
+    await AsyncStorage.multiRemove([
+      KEYS.LAST_WORKING_ROUTE,
+      KEYS.RESUME_BUILDER,
+      KEYS.INTERVIEW_SESSION,
+    ]);
+  } catch (error) {
+    console.error('Failed to clear private working state:', error);
   }
 };

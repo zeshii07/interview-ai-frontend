@@ -1,6 +1,7 @@
 import React from 'react';
 import {
   Alert,
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import { router } from 'expo-router';
 import useResumeBuilderStore from '../../store/resumeBuilderStore';
 import { generateAndShareResumePdf } from '../../services/resumeDownload';
 import { Colors, Gradients, Radius, Shadows, Spacing } from '../../constants/theme';
+import { saveLastWorkingRoute } from '../../utils/storage';
 
 function PreviewSection({ title, children }) {
   return (
@@ -40,21 +42,41 @@ export default function ResumePreviewScreen() {
   const optimizedResume = useResumeBuilderStore(
     (state) => state.optimizedResume
   );
+  const builderHydrated = useResumeBuilderStore((state) => state.builderHydrated);
   const suggestions = useResumeBuilderStore((state) => state.suggestions);
+  const optimizationMode = useResumeBuilderStore(
+    (state) => state.optimizationMode
+  );
+  const optimizationNote = useResumeBuilderStore(
+    (state) => state.optimizationNote
+  );
   const replaceOptimizedResume = useResumeBuilderStore(
     (state) => state.replaceOptimizedResume
   );
 
   const [downloading, setDownloading] = React.useState(false);
+  const [downloadSource, setDownloadSource] = React.useState(null);
 
   React.useEffect(() => {
-    if (!optimizedResume) {
+    saveLastWorkingRoute('/resume/preview');
+    return () => {
+      saveLastWorkingRoute(null);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    if (builderHydrated && !optimizedResume) {
       router.replace('/resume/generator');
     }
-  }, [optimizedResume]);
+  }, [builderHydrated, optimizedResume]);
 
-  if (!optimizedResume) {
-    return null;
+  if (!builderHydrated || !optimizedResume) {
+    return (
+      <View style={styles.restoreScreen}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.restoreText}>Restoring your resume…</Text>
+      </View>
+    );
   }
 
   const updateRoot = (field, value) => {
@@ -93,11 +115,22 @@ export default function ResumePreviewScreen() {
     try {
       setDownloading(true);
       const result = await generateAndShareResumePdf(optimizedResume);
+      setDownloadSource(result?.source || null);
 
       if (!result.shared) {
         Alert.alert(
           'PDF created',
-          `The file was created at:\n${result.uri}`
+          `The file was created at:\n${result.uri}` +
+            (result?.fallbackReason
+              ? `\n\nGenerated locally because the server was unavailable.`
+              : '')
+        );
+      } else if (result?.source === 'local') {
+        // Brief toast-like alert so the user knows it was rendered locally.
+        Alert.alert(
+          'PDF saved (offline)',
+          'Your resume was generated on this device because the server could not be reached. The layout is ATS-friendly but lacks AI enhancement.',
+          [{ text: 'OK' }]
         );
       }
     } catch (error) {
@@ -121,19 +154,39 @@ export default function ResumePreviewScreen() {
           <View style={styles.iconButton} />
         </View>
 
-        <View style={styles.notice}>
-          <Ionicons
-            name="checkmark-circle"
-            size={24}
-            color={Colors.success}
-          />
-          <View style={styles.noticeCopy}>
-            <Text style={styles.noticeTitle}>AI optimization complete</Text>
-            <Text style={styles.noticeText}>
-              Edit any wording that is inaccurate, then create your ATS-friendly PDF.
-            </Text>
+        {optimizationMode === 'local' ? (
+          <View style={styles.offlineNotice}>
+            <Ionicons
+              name="cloud-offline-outline"
+              size={24}
+              color={Colors.warning || '#B86D12'}
+            />
+            <View style={styles.noticeCopy}>
+              <Text style={styles.offlineNoticeTitle}>
+                Offline mode — your data, no AI
+              </Text>
+              <Text style={styles.noticeText}>
+                {optimizationNote
+                  ? `${optimizationNote} You can still edit the wording below and download a PDF.`
+                  : 'The AI service is unavailable. Your data has been preserved and you can still download a PDF.'}
+              </Text>
+            </View>
           </View>
-        </View>
+        ) : (
+          <View style={styles.notice}>
+            <Ionicons
+              name="checkmark-circle"
+              size={24}
+              color={Colors.success}
+            />
+            <View style={styles.noticeCopy}>
+              <Text style={styles.noticeTitle}>AI optimization complete</Text>
+              <Text style={styles.noticeText}>
+                Edit any wording that is inaccurate, then create your ATS-friendly PDF.
+              </Text>
+            </View>
+          </View>
+        )}
 
         {suggestions.length ? (
           <View style={styles.suggestions}>
@@ -151,6 +204,56 @@ export default function ResumePreviewScreen() {
           </View>
         ) : null}
 
+        {optimizedResume.templateId === 'eu-academic' &&
+        (optimizedResume.nationality ||
+          optimizedResume.dateOfBirth ||
+          optimizedResume.placeOfBirth ||
+          optimizedResume.languagesText ||
+          optimizedResume.referencesText) ? (
+          <View style={styles.academicCard}>
+            <View style={styles.academicCardHeader}>
+              <Ionicons name="school-outline" size={18} color={Colors.primary} />
+              <Text style={styles.academicCardTitle}>Academic admission details</Text>
+            </View>
+            <Text style={styles.academicCardHelp}>
+              These fields appear on your PDF only with the EU Academic template.
+              Edit them in the form if needed.
+            </Text>
+            {optimizedResume.nationality ? (
+              <Text style={styles.academicLine}>
+                <Text style={styles.academicLabel}>Nationality: </Text>
+                {optimizedResume.nationality}
+              </Text>
+            ) : null}
+            {optimizedResume.dateOfBirth ? (
+              <Text style={styles.academicLine}>
+                <Text style={styles.academicLabel}>Date of birth: </Text>
+                {optimizedResume.dateOfBirth}
+              </Text>
+            ) : null}
+            {optimizedResume.placeOfBirth ? (
+              <Text style={styles.academicLine}>
+                <Text style={styles.academicLabel}>Place of birth: </Text>
+                {optimizedResume.placeOfBirth}
+              </Text>
+            ) : null}
+            {optimizedResume.languagesText ? (
+              <Text style={styles.academicLine}>
+                <Text style={styles.academicLabel}>Languages:</Text>
+                {'\n'}
+                {optimizedResume.languagesText}
+              </Text>
+            ) : null}
+            {optimizedResume.referencesText ? (
+              <Text style={styles.academicLine}>
+                <Text style={styles.academicLabel}>References:</Text>
+                {'\n'}
+                {optimizedResume.referencesText}
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
+
         <View style={styles.paper}>
           <Text style={styles.name}>
             {`${optimizedResume.firstName || ''} ${
@@ -164,6 +267,7 @@ export default function ResumePreviewScreen() {
               optimizedResume.phone,
               optimizedResume.location,
               optimizedResume.linkedin,
+              optimizedResume.github,
               optimizedResume.portfolio,
             ]
               .filter(Boolean)
@@ -359,6 +463,28 @@ export default function ResumePreviewScreen() {
               ))}
             </PreviewSection>
           ) : null}
+
+          {(optimizedResume.customSections || []).map((item, index) => (
+            <PreviewSection
+              key={`custom-section-${index}`}
+              title={item.title || 'Additional Information'}
+            >
+              <TextInput
+                value={item.title || ''}
+                onChangeText={(value) =>
+                  updateSectionItem('customSections', index, 'title', value)
+                }
+                placeholder="Section title"
+                style={styles.itemTitleEditor}
+              />
+              <EditableText
+                value={item.content}
+                onChangeText={(value) =>
+                  updateSectionItem('customSections', index, 'content', value)
+                }
+              />
+            </PreviewSection>
+          ))}
         </View>
 
         <View style={styles.actions}>
@@ -384,7 +510,11 @@ export default function ResumePreviewScreen() {
               color="#FFFFFF"
             />
             <Text style={styles.primaryButtonText}>
-              {downloading ? 'Creating PDF...' : 'Download PDF'}
+              {downloading
+                ? 'Creating PDF...'
+                : optimizationMode === 'local'
+                  ? 'Download PDF (offline)'
+                  : 'Download PDF'}
             </Text>
           </Pressable>
         </View>
@@ -395,6 +525,8 @@ export default function ResumePreviewScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, ...Gradients.screen },
+  restoreScreen: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, ...Gradients.screen },
+  restoreText: { color: Colors.textSecondary, fontSize: 13 },
   content: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
@@ -429,6 +561,21 @@ const styles = StyleSheet.create({
     borderColor: '#B9E1D2',
     backgroundColor: '#EFFAF5',
   },
+  offlineNotice: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 11,
+    padding: 15,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#F1D9A8',
+    backgroundColor: '#FFF6E5',
+  },
+  offlineNoticeTitle: {
+    color: '#8C5400',
+    fontSize: 15,
+    fontWeight: '900',
+  },
   noticeCopy: { flex: 1, gap: 3 },
   noticeTitle: {
     color: Colors.success,
@@ -461,6 +608,39 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
     lineHeight: 17,
+  },
+  academicCard: {
+    gap: 7,
+    padding: 14,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.primaryLight,
+    backgroundColor: Colors.primaryBg,
+  },
+  academicCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  academicCardTitle: {
+    color: Colors.primaryDark,
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  academicCardHelp: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    lineHeight: 16,
+    marginBottom: 4,
+  },
+  academicLine: {
+    color: Colors.textPrimary,
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  academicLabel: {
+    fontWeight: '800',
+    color: Colors.primaryDark,
   },
   paper: {
     gap: 16,
