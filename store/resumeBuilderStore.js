@@ -14,7 +14,8 @@ const emptyEducation = () => ({
   degree: '',
   institution: '',
   location: '',
-  year: '',
+  year: '',         // end date (e.g., "2024")
+  startDate: '',    // start date (e.g., "2020") — new
   gpa: '',
 });
 
@@ -48,12 +49,15 @@ const initialResume = {
   targetRole: '',
   jobDescription: '',
   summary: '',
-  // Academic-template extras (used only when templateId === 'eu-academic')
+  // Academic-template extras (used only when templateId === 'eu-academic' or 'academic-photo')
   nationality: '',
   dateOfBirth: '',
   placeOfBirth: '',
   languagesText: '',
   referencesText: '',
+  // Photo (used only when templateId === 'academic-photo')
+  photoBase64: '',     // base64-encoded image data (no data: prefix)
+  photoMimeType: '',   // 'image/jpeg' or 'image/png'
   experience: [emptyExperience()],
   education: [emptyEducation()],
   skillsText: '',

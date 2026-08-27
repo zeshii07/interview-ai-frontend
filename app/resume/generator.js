@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Alert,
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -13,6 +14,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 import { resumeAPI } from '../../services/api';
 import useResumeBuilderStore from '../../store/resumeBuilderStore';
@@ -24,7 +27,8 @@ const RESUME_TEMPLATES = [
   { id: 'corporate-professional', name: 'Corporate', description: 'Traditional navy styling for business and large companies.', icon: 'business-outline', accent: '#17365D' },
   { id: 'european-standard', name: 'European', description: 'A4 chronological layout inspired by European CV conventions.', icon: 'globe-outline', accent: '#005B96' },
   { id: 'technical-compact', name: 'Technical', description: 'Compact skills-first styling for software and engineering roles.', icon: 'code-slash-outline', accent: '#0F766E' },
-  { id: 'eu-academic', name: 'EU Academic', description: 'Europass-style for university admissions in Germany, France, Netherlands. Includes nationality, DOB, languages with CEFR, references, signature footer.', icon: 'school-outline', accent: '#1A2A4F', badge: 'For students' },
+  { id: 'eu-academic', name: 'EU Academic', description: 'Europass-style for university admissions in Germany, France, Netherlands. Includes nationality, DOB, languages with CEFR, references.', icon: 'school-outline', accent: '#1A2A4F', badge: 'For students' },
+  { id: 'academic-photo', name: 'Academic Photo', description: 'DAAD-style CV with portrait photo top-right. Europass section order. Required by German/French universities for visa and admission.', icon: 'person-circle-outline', accent: '#1A2A4F', badge: 'With photo' },
 ];
 
 function Field({
@@ -119,6 +123,9 @@ function buildPayload(draft) {
     placeOfBirth: cleanText(draft.placeOfBirth),
     languagesText: cleanText(draft.languagesText),
     referencesText: cleanText(draft.referencesText),
+    // Photo (academic-photo template only)
+    photoBase64: draft.photoBase64 || '',
+    photoMimeType: draft.photoMimeType || '',
     skills: draft.skillsText
       .split(',')
       .map((skill) => skill.trim())
@@ -189,6 +196,47 @@ export default function ResumeGeneratorScreen() {
   );
 
   const [submitting, setSubmitting] = React.useState(false);
+  const [pickingPhoto, setPickingPhoto] = React.useState(false);
+
+  const pickPhoto = async () => {
+    if (pickingPhoto) return;
+    try {
+      setPickingPhoto(true);
+      const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert(
+          'Permission needed',
+          'Please allow photo library access to upload a portrait photo.'
+        );
+        return;
+      }
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 5], // portrait, DAAD convention
+        quality: 0.85,
+        base64: false,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      const asset = result.assets[0];
+      // Read the file as base64 so we can embed it in the PDF and send it to the backend
+      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const mimeType = asset.mimeType || 'image/jpeg';
+      updateDraft('photoBase64', base64);
+      updateDraft('photoMimeType', mimeType);
+    } catch (error) {
+      Alert.alert('Could not load photo', error?.message || 'Please try again.');
+    } finally {
+      setPickingPhoto(false);
+    }
+  };
+
+  const removePhoto = () => {
+    updateDraft('photoBase64', '');
+    updateDraft('photoMimeType', '');
+  };
 
   React.useEffect(() => {
     saveLastWorkingRoute('/resume/generator');
@@ -295,7 +343,12 @@ export default function ResumeGeneratorScreen() {
           contentContainerStyle={styles.content}
         >
           <View style={styles.topBar}>
-            <Pressable onPress={() => router.back()} style={styles.iconButton}>
+            <Pressable
+              onPress={() =>
+                router.canGoBack() ? router.back() : router.replace('/(tabs)/')
+              }
+              style={styles.iconButton}
+            >
               <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
             </Pressable>
             <Text style={styles.screenTitle}>ATS Resume Generator</Text>
@@ -444,16 +497,71 @@ export default function ResumeGeneratorScreen() {
             />
           </View>
 
-          {draft.templateId === 'eu-academic' ? (
+          {(draft.templateId === 'eu-academic' || draft.templateId === 'academic-photo') ? (
             <View style={styles.section}>
               <SectionHeader
                 title="Academic admission details"
-                subtitle="Used by the EU Academic template. Required by universities in Germany, France, and the Netherlands for international admission applications."
+                subtitle="Used by the EU Academic and Academic Photo templates. Required by universities in Germany, France, and the Netherlands for international admission applications."
               />
+              {draft.templateId === 'academic-photo' ? (
+                <View style={styles.photoPickerContainer}>
+                  <Text style={styles.label}>PORTRAIT PHOTO (4:5, DAAD STYLE)</Text>
+                  <View style={styles.photoPickerRow}>
+                    {draft.photoBase64 ? (
+                      <Image
+                        source={{
+                          uri: `data:${draft.photoMimeType || 'image/jpeg'};base64,${draft.photoBase64}`,
+                        }}
+                        style={styles.photoPreview}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={[styles.photoPreview, styles.photoPreviewEmpty]}>
+                        <Ionicons name="person-outline" size={36} color={Colors.muted || '#9996AA'} />
+                        <Text style={styles.photoPreviewEmptyText}>No photo</Text>
+                      </View>
+                    )}
+                    <View style={styles.photoPickerActions}>
+                      <Pressable
+                        onPress={pickPhoto}
+                        disabled={pickingPhoto}
+                        style={({ pressed }) => [
+                          styles.photoPickerButton,
+                          (pressed || pickingPhoto) && styles.buttonPressed,
+                        ]}
+                      >
+                        <Ionicons
+                          name={pickingPhoto ? 'hourglass-outline' : 'cloud-upload-outline'}
+                          size={18}
+                          color="#FFFFFF"
+                        />
+                        <Text style={styles.photoPickerButtonText}>
+                          {pickingPhoto ? 'Loading…' : draft.photoBase64 ? 'Replace photo' : 'Upload photo'}
+                        </Text>
+                      </Pressable>
+                      {draft.photoBase64 ? (
+                        <Pressable
+                          onPress={removePhoto}
+                          style={({ pressed }) => [
+                            styles.photoRemoveButton,
+                            pressed && styles.buttonPressed,
+                          ]}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={Colors.error} />
+                          <Text style={styles.photoRemoveButtonText}>Remove</Text>
+                        </Pressable>
+                      ) : null}
+                      <Text style={styles.photoHint}>
+                        If no photo is uploaded, an initials avatar will be used on the CV.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
               <View style={styles.aiHint}>
                 <Ionicons name="school-outline" size={15} color={Colors.primary} />
                 <Text style={styles.aiHintText}>
-                  These fields appear on the PDF only when EU Academic is selected.
+                  These fields appear on the PDF only when EU Academic or Academic Photo is selected.
                   Nationality, date of birth, and place of birth are expected by
                   EU universities. Use CEFR levels (A1–C2) for languages.
                 </Text>
@@ -636,25 +744,33 @@ export default function ResumeGeneratorScreen() {
                 <View style={styles.twoColumns}>
                   <View style={styles.column}>
                     <Field
-                      label="YEAR"
-                      value={item.year}
+                      label="START YEAR"
+                      value={item.startDate}
                       onChangeText={(value) =>
-                        updateArrayItem('education', index, 'year', value)
+                        updateArrayItem('education', index, 'startDate', value)
                       }
-                      placeholder="2026"
+                      placeholder="2020"
                     />
                   </View>
                   <View style={styles.column}>
                     <Field
-                      label="GPA (OPTIONAL)"
-                      value={item.gpa}
+                      label="END YEAR"
+                      value={item.year}
                       onChangeText={(value) =>
-                        updateArrayItem('education', index, 'gpa', value)
+                        updateArrayItem('education', index, 'year', value)
                       }
-                      placeholder="3.4/4.0"
+                      placeholder="2024"
                     />
                   </View>
                 </View>
+                <Field
+                  label="GPA / GRADE (OPTIONAL)"
+                  value={item.gpa}
+                  onChangeText={(value) =>
+                    updateArrayItem('education', index, 'gpa', value)
+                  }
+                  placeholder="3.4/4.0"
+                />
               </ItemCard>
             ))}
           </View>
@@ -1066,5 +1182,73 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     textAlign: 'center',
+  },
+  // Photo picker (academic-photo template only)
+  photoPickerContainer: {
+    gap: 10,
+    marginBottom: 6,
+  },
+  photoPickerRow: {
+    flexDirection: 'row',
+    gap: 14,
+    alignItems: 'flex-start',
+  },
+  photoPreview: {
+    width: 95,
+    height: 119,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgElevated,
+  },
+  photoPreviewEmpty: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  photoPreviewEmptyText: {
+    color: Colors.textMuted,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  photoPickerActions: {
+    flex: 1,
+    gap: 8,
+  },
+  photoPickerButton: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.primary,
+    ...Shadows.primary,
+  },
+  photoPickerButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  photoRemoveButton: {
+    minHeight: 38,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.error,
+    backgroundColor: 'rgba(200, 74, 89, 0.06)',
+  },
+  photoRemoveButtonText: {
+    color: Colors.error,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  photoHint: {
+    color: Colors.textMuted,
+    fontSize: 11,
+    lineHeight: 16,
   },
 });

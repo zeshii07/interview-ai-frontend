@@ -116,7 +116,11 @@ export const clearAllData = async () => {
 export const loadLastWorkingRoute = async () => {
   try {
     const route = await AsyncStorage.getItem(KEYS.LAST_WORKING_ROUTE);
-    return ['/resume/generator', '/resume/preview', '/resume/analyze', '/interview/session'].includes(route)
+    // Note: '/resume/preview' is intentionally NOT in this list. If the app
+    // crashes or is killed while the user is on the preview screen, we want
+    // the next launch to land on the generator (which has their draft) — not
+    // on the preview screen, which has no parent to go back to.
+    return ['/resume/generator', '/resume/analyze', '/interview/session'].includes(route)
       ? route
       : null;
   } catch {
@@ -126,7 +130,7 @@ export const loadLastWorkingRoute = async () => {
 
 export const saveLastWorkingRoute = async (route) => {
   try {
-    if (['/resume/generator', '/resume/preview', '/resume/analyze', '/interview/session'].includes(route)) {
+    if (['/resume/generator', '/resume/analyze', '/interview/session'].includes(route)) {
       await AsyncStorage.setItem(KEYS.LAST_WORKING_ROUTE, route);
     } else {
       await AsyncStorage.removeItem(KEYS.LAST_WORKING_ROUTE);

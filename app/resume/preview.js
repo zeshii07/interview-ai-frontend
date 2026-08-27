@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Alert,
   ActivityIndicator,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import useResumeBuilderStore from '../../store/resumeBuilderStore';
-import { generateAndShareResumePdf } from '../../services/resumeDownload';
+import { generateAndShareResumePdf, generateAndShareResumeDocx } from '../../services/resumeDownload';
 import { Colors, Gradients, Radius, Shadows, Spacing } from '../../constants/theme';
 import { saveLastWorkingRoute } from '../../utils/storage';
 
@@ -55,10 +56,15 @@ export default function ResumePreviewScreen() {
   );
 
   const [downloading, setDownloading] = React.useState(false);
+  const [downloadingFormat, setDownloadingFormat] = React.useState(null); // 'pdf' | 'docx' | null
   const [downloadSource, setDownloadSource] = React.useState(null);
 
   React.useEffect(() => {
-    saveLastWorkingRoute('/resume/preview');
+    // Save the GENERATOR route (not /resume/preview) as the last working
+    // route. That way, if the user restarts the app while on the preview
+    // screen, they land back on the generator (with their draft intact)
+    // instead of being stuck on preview with no parent screen to go back to.
+    saveLastWorkingRoute('/resume/generator');
     return () => {
       saveLastWorkingRoute(null);
     };
@@ -66,6 +72,7 @@ export default function ResumePreviewScreen() {
 
   React.useEffect(() => {
     if (builderHydrated && !optimizedResume) {
+      // Use replace (not push) so the back stack stays clean.
       router.replace('/resume/generator');
     }
   }, [builderHydrated, optimizedResume]);
@@ -111,25 +118,35 @@ export default function ResumePreviewScreen() {
     });
   };
 
-  const downloadPdf = async () => {
+  const downloadResume = async (format) => {
+    if (format !== 'pdf' && format !== 'docx') return;
     try {
       setDownloading(true);
-      const result = await generateAndShareResumePdf(optimizedResume);
+      setDownloadingFormat(format);
+      const result =
+        format === 'pdf'
+          ? await generateAndShareResumePdf(optimizedResume)
+          : await generateAndShareResumeDocx(optimizedResume);
       setDownloadSource(result?.source || null);
+
+      const label = format === 'pdf' ? 'PDF' : 'Word document';
+      const offlineLabel =
+        format === 'pdf'
+          ? 'PDF saved (offline)'
+          : 'Word document saved (offline)';
 
       if (!result.shared) {
         Alert.alert(
-          'PDF created',
+          `${label} created`,
           `The file was created at:\n${result.uri}` +
             (result?.fallbackReason
               ? `\n\nGenerated locally because the server was unavailable.`
               : '')
         );
       } else if (result?.source === 'local') {
-        // Brief toast-like alert so the user knows it was rendered locally.
         Alert.alert(
-          'PDF saved (offline)',
-          'Your resume was generated on this device because the server could not be reached. The layout is ATS-friendly but lacks AI enhancement.',
+          offlineLabel,
+          `Your ${label.toLowerCase()} was generated on this device because the server could not be reached. The layout is ATS-friendly but lacks AI enhancement.`,
           [{ text: 'OK' }]
         );
       }
@@ -137,8 +154,12 @@ export default function ResumePreviewScreen() {
       Alert.alert('Download failed', error.message);
     } finally {
       setDownloading(false);
+      setDownloadingFormat(null);
     }
   };
+
+  const downloadPdf = () => downloadResume('pdf');
+  const downloadDocx = () => downloadResume('docx');
 
   return (
     <View style={styles.screen}>
@@ -147,7 +168,12 @@ export default function ResumePreviewScreen() {
         contentContainerStyle={styles.content}
       >
         <View style={styles.topBar}>
-          <Pressable onPress={() => router.back()} style={styles.iconButton}>
+          <Pressable
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/resume/generator')
+            }
+            style={styles.iconButton}
+          >
             <Ionicons name="arrow-back" size={24} color={Colors.textPrimary} />
           </Pressable>
           <Text style={styles.screenTitle}>Review Resume</Text>
@@ -204,21 +230,36 @@ export default function ResumePreviewScreen() {
           </View>
         ) : null}
 
-        {optimizedResume.templateId === 'eu-academic' &&
+        {(optimizedResume.templateId === 'eu-academic' || optimizedResume.templateId === 'academic-photo') &&
         (optimizedResume.nationality ||
           optimizedResume.dateOfBirth ||
           optimizedResume.placeOfBirth ||
           optimizedResume.languagesText ||
-          optimizedResume.referencesText) ? (
+          optimizedResume.referencesText ||
+          optimizedResume.photoBase64) ? (
           <View style={styles.academicCard}>
             <View style={styles.academicCardHeader}>
               <Ionicons name="school-outline" size={18} color={Colors.primary} />
               <Text style={styles.academicCardTitle}>Academic admission details</Text>
             </View>
             <Text style={styles.academicCardHelp}>
-              These fields appear on your PDF only with the EU Academic template.
+              These fields appear on your PDF only with the EU Academic or Academic Photo template.
               Edit them in the form if needed.
             </Text>
+            {optimizedResume.templateId === 'academic-photo' && optimizedResume.photoBase64 ? (
+              <View style={styles.photoPreviewRow}>
+                <Image
+                  source={{
+                    uri: `data:${optimizedResume.photoMimeType || 'image/jpeg'};base64,${optimizedResume.photoBase64}`,
+                  }}
+                  style={styles.photoPreviewThumb}
+                  resizeMode="cover"
+                />
+                <Text style={styles.academicLine}>
+                  Photo will be placed top-right on the CV (DAAD style).
+                </Text>
+              </View>
+            ) : null}
             {optimizedResume.nationality ? (
               <Text style={styles.academicLine}>
                 <Text style={styles.academicLabel}>Nationality: </Text>
@@ -489,7 +530,9 @@ export default function ResumePreviewScreen() {
 
         <View style={styles.actions}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() =>
+              router.canGoBack() ? router.back() : router.replace('/resume/generator')
+            }
             style={styles.secondaryButton}
           >
             <Ionicons name="create-outline" size={20} color={Colors.primaryDark} />
@@ -505,16 +548,38 @@ export default function ResumePreviewScreen() {
             ]}
           >
             <Ionicons
-              name={downloading ? 'hourglass-outline' : 'download-outline'}
+              name={downloadingFormat === 'pdf' ? 'hourglass-outline' : 'document-outline'}
               size={21}
               color="#FFFFFF"
             />
             <Text style={styles.primaryButtonText}>
-              {downloading
+              {downloadingFormat === 'pdf'
                 ? 'Creating PDF...'
                 : optimizationMode === 'local'
-                  ? 'Download PDF (offline)'
-                  : 'Download PDF'}
+                  ? 'PDF (offline)'
+                  : 'PDF'}
+            </Text>
+          </Pressable>
+
+          <Pressable
+            disabled={downloading}
+            onPress={downloadDocx}
+            style={[
+              styles.primaryButton,
+              downloading && styles.buttonDisabled,
+            ]}
+          >
+            <Ionicons
+              name={downloadingFormat === 'docx' ? 'hourglass-outline' : 'document-text-outline'}
+              size={21}
+              color="#FFFFFF"
+            />
+            <Text style={styles.primaryButtonText}>
+              {downloadingFormat === 'docx'
+                ? 'Creating Word...'
+                : optimizationMode === 'local'
+                  ? 'Word (offline)'
+                  : 'Word'}
             </Text>
           </Pressable>
         </View>
@@ -642,6 +707,19 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: Colors.primaryDark,
   },
+  photoPreviewRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  photoPreviewThumb: {
+    width: 60,
+    height: 75,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   paper: {
     gap: 16,
     padding: 22,
@@ -745,11 +823,11 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: Colors.primaryDark,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
   },
   primaryButton: {
-    flex: 1.25,
+    flex: 1,
     minHeight: 56,
     flexDirection: 'row',
     alignItems: 'center',
@@ -761,7 +839,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
   },
   buttonDisabled: { opacity: 0.65 },

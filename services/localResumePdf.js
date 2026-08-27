@@ -165,6 +165,19 @@ const TEMPLATES = {
     headingStyle: 'academic',
     headerStyle: 'academic',
   },
+  'academic-photo': {
+    ...COLOR_PALETTE,
+    id: 'academic-photo',
+    ink: '#1A2A4F',
+    body: '#2C3E50',
+    muted: '#7B8794',
+    blue: '#1A2A4F',
+    chip: '#E8EEF7',
+    rule: '#1A2A4F',
+    lightRule: '#C5CFDD',
+    headingStyle: 'academic',
+    headerStyle: 'academic-photo',
+  },
 };
 
 function getTheme(templateId) {
@@ -653,67 +666,143 @@ function addReferencesBlock(canvas, referencesText) {
 }
 
 /**
- * Europass / DAAD-style footer: "Place, Date" on the left, signature line on
- * the right. Rendered on the LAST page only, anchored to the page bottom.
+ * Europass / DAAD-style signature footer ("Place, Date" + signature line) was
+ * previously rendered here but has been removed at the user's request. The
+ * EU Academic template now ends with the References block, with no extra
+ * signature/date footer on any page.
  */
-function addAcademicFooter(canvas, fullName) {
-  const page = canvas.page;
-  const footerY = 32;
 
-  // Left: "Place, Date" placeholder
-  page.drawText('Place, Date:', {
-    x: canvas.margins.left,
-    y: footerY,
-    size: 9,
-    font: canvas.fonts.regular,
-    color: hexToColor(canvas.theme.muted),
-  });
-
-  // Right: signature line + label
-  const signatureLineWidth = 200;
-  const signatureX =
-    canvas.pageWidth - canvas.margins.right - signatureLineWidth;
-  page.drawLine({
-    start: { x: signatureX, y: footerY + 2 },
-    end: {
-      x: signatureX + signatureLineWidth,
-      y: footerY + 2,
-    },
-    thickness: 0.6,
-    color: hexToColor(canvas.theme.muted),
-  });
-  page.drawText('Signature', {
-    x: signatureX,
-    y: footerY - 11,
-    size: 8,
-    font: canvas.fonts.regular,
-    color: hexToColor(canvas.theme.muted),
-  });
+/**
+ * Format education date range from start + end (year) fields.
+ *   start=2020, end=2024 -> "2020 - 2024"
+ *   start=2020, end=''   -> "2020 - Present"
+ *   start='',   end=2024 -> "2024"
+ *   start='',   end=''   -> ""
+ */
+function formatEducationDateRange(startDate, endDate) {
+  const start = safeText(startDate);
+  const end = safeText(endDate);
+  if (start && end) return `${start} - ${end}`;
+  if (start) return `${start} - Present`;
+  if (end) return end;
+  return '';
 }
 
-function addContactLine(canvas, resumeData) {
+// ---------- contact icons (no visible text, with hyperlinks) ----------
+
+/**
+ * Draw a small vector icon for a contact type. Mirrors the backend PDF.
+ * Coordinate (x, y) is the top-left of the 9x9 icon box.
+ */
+function drawContactIcon(canvas, type, x, y) {
+  const page = canvas.page;
+  const theme = canvas.theme;
+  const color = hexToColor(theme.blue);
+
+  if (type === 'email') {
+    page.drawRectangle({ x, y: y + 1, width: 9, height: 7, borderColor: color, borderWidth: 0.8 });
+    page.drawLine({ start: { x, y: y + 1 }, end: { x: x + 4.5, y: y + 5 }, thickness: 0.8, color });
+    page.drawLine({ start: { x: x + 9, y: y + 1 }, end: { x: x + 4.5, y: y + 5 }, thickness: 0.8, color });
+  } else if (type === 'phone') {
+    // simplified phone: filled circle with two dots
+    page.drawCircle({ x: x + 4.5, y: y + 4.5, size: 3.7, borderColor: color, borderWidth: 0.8 });
+    page.drawCircle({ x: x + 1.2, y: y + 7.2, size: 1, color });
+    page.drawCircle({ x: x + 7.8, y: y + 1.8, size: 1, color });
+  } else if (type === 'location') {
+    page.drawCircle({ x: x + 4.5, y: y + 3.5, size: 3.3, borderColor: color, borderWidth: 0.8 });
+    page.drawCircle({ x: x + 4.5, y: y + 3.5, size: 1.1, borderColor: color, borderWidth: 0.8 });
+    page.drawLine({ start: { x: x + 2.2, y: y + 6 }, end: { x: x + 4.5, y: y + 9 }, thickness: 0.8, color });
+    page.drawLine({ start: { x: x + 6.8, y: y + 6 }, end: { x: x + 4.5, y: y + 9 }, thickness: 0.8, color });
+  } else if (type === 'linkedin') {
+    page.drawRectangle({ x, y, width: 9, height: 9, color });
+    page.drawText('in', {
+      x: x + 1.6, y: y + 1.8, size: 5.5, font: canvas.fonts.bold, color: hexToColor('#FFFFFF'),
+    });
+  } else if (type === 'github') {
+    page.drawCircle({ x: x + 4.5, y: y + 4.5, size: 4.2, borderColor: color, borderWidth: 0.8 });
+    page.drawText('GH', {
+      x: x + 1.1, y: y + 2.1, size: 4.5, font: canvas.fonts.bold, color,
+    });
+  } else {
+    // portfolio: two linked circles
+    page.drawCircle({ x: x + 3, y: y + 4.5, size: 2.5, borderColor: color, borderWidth: 0.8 });
+    page.drawCircle({ x: x + 7, y: y + 4.5, size: 2.5, borderColor: color, borderWidth: 0.8 });
+    page.drawLine({ start: { x: x + 3.5, y: y + 4.5 }, end: { x: x + 6.5, y: y + 4.5 }, thickness: 0.8, color });
+  }
+}
+
+function addContactIconsRow(canvas, resumeData) {
+  const email = safeText(resumeData.email);
+  const phone = safeText(resumeData.phone);
+  const location = safeText(resumeData.location);
+  const linkedin = safeText(resumeData.linkedin);
+  const github = safeText(resumeData.github);
+  const portfolio = safeText(resumeData.portfolio);
+
   const items = [
-    safeText(resumeData.email),
-    safeText(resumeData.phone),
-    safeText(resumeData.location),
-    safeText(resumeData.linkedin),
-    safeText(resumeData.github),
-    safeText(resumeData.portfolio),
-  ].filter(Boolean);
+    { type: 'email',    link: email ? `mailto:${email}` : '' },
+    { type: 'phone',    link: phone ? `tel:${phone.replace(/\s+/g, '')}` : '' },
+    { type: 'location', link: '' },
+    { type: 'linkedin', link: linkedin ? (linkedin.startsWith('http') ? linkedin : `https://${linkedin}`) : '' },
+    { type: 'github',   link: github ? (github.startsWith('http') ? github : `https://${github}`) : '' },
+    { type: 'portfolio',link: portfolio ? (portfolio.startsWith('http') ? portfolio : `https://${portfolio}`) : '' },
+  ].filter((it) => it.link || (it.type === 'location' && location));
 
   if (!items.length) {
     canvas.moveDown(8);
     return;
   }
 
-  const text = items.join('   |   ');
-  canvas.drawText(text, {
-    size: 9,
-    color: canvas.theme.body,
-    maxWidth: canvas.contentWidth,
-    align: canvas.theme.headerStyle === 'center' ? 'center' : 'left',
+  // Each icon takes ~20pt of horizontal space (9pt icon + 11pt gap)
+  const slotWidth = 20;
+  const right = canvas.pageWidth - canvas.margins.right;
+  let x = canvas.margins.left;
+  const pageRef = canvas.page.node;
+
+  items.forEach((item) => {
+    if (x + slotWidth > right) {
+      x = canvas.margins.left;
+      canvas.moveDown(16);
+    }
+    const iconY = canvas.y;
+    drawContactIcon(canvas, item.type, x, iconY);
+
+    // Add a clickable link annotation over the icon area.
+    // pdf-lib doesn't have a high-level API for this, so we use the low-level
+    // context.register + node.addAnnot pattern. The annotation is invisible
+    // (no border) but clicking it opens the URL.
+    if (item.link) {
+      try {
+        const linkDict = canvas.doc.context.obj({
+          Type: 'Annot',
+          Subtype: 'Link',
+          // pdf-lib uses bottom-left origin; our iconY is in top-down coords.
+          // Convert: pdfY = pageHeight - topY.
+          Rect: [
+            x,
+            canvas.pageHeight - iconY - 11,
+            x + slotWidth,
+            canvas.pageHeight - iconY,
+          ],
+          Border: [0, 0, 0],
+          A: { Type: 'Action', S: 'URI', URI: item.link },
+        });
+        const ref = canvas.doc.context.register(linkDict);
+        pageRef.addAnnot(ref);
+      } catch (err) {
+        // Link annotation is best-effort; if it fails, the icon is still visible.
+        console.warn('[localResumePdf] Failed to add link annotation:', err?.message);
+      }
+    }
+    x += slotWidth;
   });
+
   canvas.moveDown(16);
+}
+
+function addContactLine(canvas, resumeData) {
+  // DEPRECATED: replaced by addContactIconsRow. Kept for backward compat.
+  addContactIconsRow(canvas, resumeData);
 }
 
 // ---------- main entry ----------
@@ -748,7 +837,70 @@ export async function buildResumePdfBytes(resumeData = {}) {
   const canvas = new ResumeCanvas(doc, theme, { regular, bold });
 
   // --- header ---
-  if (theme.headerStyle === 'academic') {
+  if (theme.headerStyle === 'academic-photo') {
+    // DAAD-style header: portrait photo top-right, name+target on left
+    const photoW = 90;
+    const photoH = 113; // 4:5 portrait
+    const photoX = canvas.pageWidth - canvas.margins.right - photoW;
+    const photoY = canvas.y;
+    const leftTextWidth = photoX - canvas.margins.left - 14;
+
+    const photoBase64 = safeText(resumeData.photoBase64);
+    let photoEmbedded = false;
+    if (photoBase64) {
+      try {
+        // Decode base64 to Uint8Array and embed with pdf-lib
+        const binary = atob(photoBase64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        const isPng = (resumeData.photoMimeType || '').includes('png');
+        const img = isPng ? await canvas.doc.embedPng(bytes) : await canvas.doc.embedJpg(bytes);
+        canvas.page.drawImage(img, { x: photoX, y: canvas.pageHeight - photoY - photoH, width: photoW, height: photoH });
+        photoEmbedded = true;
+      } catch (err) {
+        console.warn('[localResumePdf] Failed to embed photo:', err?.message);
+      }
+    }
+    if (!photoEmbedded) {
+      // Initials avatar fallback
+      const initials = `${safeText(resumeData.firstName, 'A').charAt(0)}${safeText(resumeData.lastName, 'U').charAt(0)}`.toUpperCase();
+      canvas.drawRect(photoX, photoY, photoW, photoH, canvas.theme.chip);
+      canvas.drawRect(photoX, photoY, photoW, photoH, canvas.theme.rule, { borderWidth: 0.75 });
+      canvas.drawText(initials, {
+        size: 34, bold: true, color: canvas.theme.blue,
+        x: photoX, y: photoY + photoH / 2 - 17,
+        maxWidth: photoW, align: 'center',
+      });
+    }
+
+    // Name + target role on the left of the photo
+    const nameY = photoY + 8;
+    canvas.drawText(fullName, {
+      size: 22, bold: true, color: theme.ink,
+      x: canvas.margins.left, y: nameY,
+      maxWidth: leftTextWidth, align: 'left',
+    });
+    if (targetRole) {
+      canvas.drawText(targetRole, {
+        size: 11, bold: false, color: theme.blue,
+        x: canvas.margins.left, y: nameY + 30,
+        maxWidth: leftTextWidth, align: 'left',
+      });
+    }
+
+    // Move cursor below the photo
+    canvas.y = photoY + photoH + 8;
+
+    // Thin centered rule under the header
+    const ruleY = canvas.y;
+    canvas.drawLine(
+      canvas.margins.left + 80, ruleY,
+      canvas.pageWidth - canvas.margins.right - 80, ruleY,
+      theme.rule, 0.75
+    );
+    canvas.moveDown(14);
+    addAcademicPersonalDetails(canvas, resumeData);
+  } else if (theme.headerStyle === 'academic') {
     // Europass-inspired centered header
     canvas.drawText(fullName, {
       size: 22,
@@ -859,7 +1011,7 @@ export async function buildResumePdfBytes(resumeData = {}) {
   if (summary) {
     addSectionHeading(
       canvas,
-      templateId === 'eu-academic' ? 'Personal Statement' : 'Summary'
+      (templateId === 'eu-academic' || templateId === 'academic-photo') ? 'Personal Statement' : 'Summary'
     );
     addParagraph(canvas, summary);
   }
@@ -869,22 +1021,22 @@ export async function buildResumePdfBytes(resumeData = {}) {
   // (Education first, then research/projects, experience, skills,
   //  languages, references, signature footer)
   // ============================================================
-  if (templateId === 'eu-academic') {
+  if (templateId === 'eu-academic' || templateId === 'academic-photo') {
     // Education (most important for students)
     const education = safeArray(resumeData.education);
     if (education.length) {
       addSectionHeading(canvas, 'Education');
       education.forEach((item, index) => {
-        addHeadingRow(
-          canvas,
-          safeText(item?.degree, 'Qualification'),
-          safeText(item?.gpa) || safeText(item?.year)
-        );
-        if (item?.institution) {
-          addSubheadingRow(canvas, safeText(item?.institution), safeText(item?.location));
+        // Line 1: degree (left) + gpa (right)
+        addHeadingRow(canvas, safeText(item?.degree, 'Qualification'), safeText(item?.gpa));
+        // Line 2: institution (left) + date range (right)
+        const dateRange = formatEducationDateRange(item?.startDate, item?.year);
+        if (safeText(item?.institution) || dateRange) {
+          addSubheadingRow(canvas, safeText(item?.institution), dateRange);
         }
-        if (item?.gpa && item?.year) {
-          addMetaRow(canvas, safeText(item?.year), '');
+        // Line 3: location
+        if (item?.location) {
+          addMetaRow(canvas, safeText(item?.location), '');
         }
         if (index < education.length - 1) canvas.moveDown(6);
       });
@@ -986,11 +1138,17 @@ export async function buildResumePdfBytes(resumeData = {}) {
   if (education.length) {
     addSectionHeading(canvas, 'Education');
     education.forEach((item, index) => {
+      // Line 1: degree (left) + gpa (right)
       addHeadingRow(canvas, safeText(item?.degree, 'Qualification'), safeText(item?.gpa));
-      if (item?.institution) {
-        addSubheadingRow(canvas, safeText(item?.institution), '');
+      // Line 2: institution (left) + date range (right)
+      const dateRange = formatEducationDateRange(item?.startDate, item?.year);
+      if (safeText(item?.institution) || dateRange) {
+        addSubheadingRow(canvas, safeText(item?.institution), dateRange);
       }
-      addMetaRow(canvas, safeText(item?.year), safeText(item?.location));
+      // Line 3: location
+      if (item?.location) {
+        addMetaRow(canvas, safeText(item?.location), '');
+      }
       if (index < education.length - 1) canvas.moveDown(6);
     });
   }
@@ -1087,16 +1245,6 @@ export async function buildResumePdfBytes(resumeData = {}) {
       color: hexToColor('#999999'),
     });
   });
-
-  // --- academic signature footer (last page only) ---
-  if (templateId === 'eu-academic') {
-    const lastPage = pages[pages.length - 1];
-    // Temporarily bind canvas to the last page so addAcademicFooter draws there
-    const savedPage = canvas.page;
-    canvas.page = lastPage;
-    addAcademicFooter(canvas, fullName);
-    canvas.page = savedPage;
-  }
 
   return doc.save();
 }
