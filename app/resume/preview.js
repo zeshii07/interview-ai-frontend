@@ -57,7 +57,6 @@ export default function ResumePreviewScreen() {
 
   const [downloading, setDownloading] = React.useState(false);
   const [downloadingFormat, setDownloadingFormat] = React.useState(null); // 'pdf' | 'docx' | null
-  const [downloadSource, setDownloadSource] = React.useState(null);
 
   React.useEffect(() => {
     // Save the GENERATOR route (not /resume/preview) as the last working
@@ -123,32 +122,13 @@ export default function ResumePreviewScreen() {
     try {
       setDownloading(true);
       setDownloadingFormat(format);
-      const result =
-        format === 'pdf'
-          ? await generateAndShareResumePdf(optimizedResume)
-          : await generateAndShareResumeDocx(optimizedResume);
-      setDownloadSource(result?.source || null);
-
-      const label = format === 'pdf' ? 'PDF' : 'Word document';
-      const offlineLabel =
-        format === 'pdf'
-          ? 'PDF saved (offline)'
-          : 'Word document saved (offline)';
-
-      if (!result.shared) {
-        Alert.alert(
-          `${label} created`,
-          `The file was created at:\n${result.uri}` +
-            (result?.fallbackReason
-              ? `\n\nGenerated locally because the server was unavailable.`
-              : '')
-        );
-      } else if (result?.source === 'local') {
-        Alert.alert(
-          offlineLabel,
-          `Your ${label.toLowerCase()} was generated on this device because the server could not be reached. The layout is ATS-friendly but lacks AI enhancement.`,
-          [{ text: 'OK' }]
-        );
+      // saveOrShareFile() in resumeDownload.js handles the Save/Share dialog
+      // (including "Save to Downloads" on Android). No additional alert needed
+      // here — the download service shows its own alerts.
+      if (format === 'pdf') {
+        await generateAndShareResumePdf(optimizedResume);
+      } else {
+        await generateAndShareResumeDocx(optimizedResume);
       }
     } catch (error) {
       Alert.alert('Download failed', error.message);
@@ -553,11 +533,7 @@ export default function ResumePreviewScreen() {
               color="#FFFFFF"
             />
             <Text style={styles.primaryButtonText}>
-              {downloadingFormat === 'pdf'
-                ? 'Creating PDF...'
-                : optimizationMode === 'local'
-                  ? 'PDF (offline)'
-                  : 'PDF'}
+              {downloadingFormat === 'pdf' ? 'Creating PDF...' : 'PDF'}
             </Text>
           </Pressable>
 
@@ -575,11 +551,7 @@ export default function ResumePreviewScreen() {
               color="#FFFFFF"
             />
             <Text style={styles.primaryButtonText}>
-              {downloadingFormat === 'docx'
-                ? 'Creating Word...'
-                : optimizationMode === 'local'
-                  ? 'Word (offline)'
-                  : 'Word'}
+              {downloadingFormat === 'docx' ? 'Creating Word...' : 'Word'}
             </Text>
           </Pressable>
         </View>

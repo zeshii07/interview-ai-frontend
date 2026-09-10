@@ -11,7 +11,7 @@
  *   ~100 lines, has zero dependencies, and renders cleanly in every word
  *   processor we care about.
  *
- * Visual styling mirrors the PDF output for each of the 5 templates:
+ * Visual styling mirrors the PDF output for each template:
  *   - ats-classic:              left-aligned name, thin rule under section heading
  *   - corporate-professional:   centered name, navy band on section headings
  *   - european-standard:        blue header box, blue rules
@@ -93,7 +93,7 @@ function formatEducationDateRange(startDate, endDate) {
   return '';
 }
 
-// ---------- contact icons (no visible text, only hyperlinked Unicode glyphs) ----------
+// ---------- contact details (visible text, icons, and hyperlinks) ----------
 
 function buildContactIconsRow(resumeData, theme) {
   const email = safeText(resumeData.email);
@@ -105,7 +105,7 @@ function buildContactIconsRow(resumeData, theme) {
 
   const glyphMap = {
     email: '&#9993;',     // ✉
-    phone: '&#9742;',     // ☎
+    phone: '&#128222;',   // 📞 phone receiver
     linkedin: 'in',
     github: 'GH',
     portfolio: '&#128279;', // 🔗 chain
@@ -127,10 +127,11 @@ function buildContactIconsRow(resumeData, theme) {
     const glyph = glyphMap[item.type] || '&#9679;';
     const fontSize = (item.type === 'linkedin' || item.type === 'github') ? '9pt' : '13pt';
     const styledGlyph = `<span style="color:${theme.accent};font-size:${fontSize};font-weight:bold;text-decoration:none;">${glyph}</span>`;
+    const visibleValue = `<span style="color:${theme.body};font-size:9pt;text-decoration:none;">&nbsp;${escapeHtml(item.val)}</span>`;
     if (item.link) {
-      return `<a href="${escapeHtml(item.link)}" style="text-decoration:none;color:${theme.accent};">${styledGlyph}</a>`;
+      return `<a href="${escapeHtml(item.link)}" style="display:inline-block;margin:0 10pt 4pt 0;text-decoration:none;">${styledGlyph}${visibleValue}</a>`;
     }
-    return styledGlyph;
+    return `<span style="display:inline-block;margin:0 10pt 4pt 0;">${styledGlyph}${visibleValue}</span>`;
   });
 
   return `<div style="text-align:${theme.headerAlign};color:${theme.body};font-size:13pt;font-family:Helvetica,Arial,sans-serif;margin-bottom:10pt;">${parts.join('&nbsp;&nbsp;&nbsp;&nbsp;')}</div>`;
@@ -145,31 +146,61 @@ function buildHeader(resumeData, theme) {
   const isAcademic = resumeData.templateId === 'eu-academic';
   const isAcademicPhoto = resumeData.templateId === 'academic-photo';
   const isCorporate = resumeData.templateId === 'corporate-professional';
+  const isEuropean = resumeData.templateId === 'european-standard';
 
   let html = '';
 
   if (isAcademicPhoto) {
-    // DAAD-style: 2-column table — name/target on left, photo on right
+    // DAAD-style header with two horizontal rules:
+    //   [Name]                        [Photo]
+    //   ════════════════════════════════════════  (rule 1)
+    //   [Target Role]                  [Photo]
+    //   [Contact Icons]                [Photo]
+    //   Nationality: X                 [Photo]
+    //   Date of birth: Y               [Photo]
+    //   Place of birth: Z              [Photo]
+    //   ════════════════════════════════════════  (rule 2)
+
     const photoBase64 = safeText(resumeData.photoBase64);
     const photoMime = safeText(resumeData.photoMimeType) || 'image/jpeg';
     let photoHtml;
     if (photoBase64) {
-      photoHtml = `<img src="data:${photoMime};base64,${photoBase64}" width="95" height="119" style="border:0.75pt solid ${theme.rule};"/>`;
+      photoHtml = `<img src="data:${photoMime};base64,${photoBase64}" width="110" height="138" style="border:0.75pt solid ${theme.rule};"/>`;
     } else {
       const initials = `${safeText(resumeData.firstName, 'A').charAt(0)}${safeText(resumeData.lastName, 'U').charAt(0)}`.toUpperCase();
-      photoHtml = `<div style="width:95px;height:119px;background-color:${theme.chipBg};border:0.75pt solid ${theme.rule};display:flex;align-items:center;justify-content:center;color:${theme.accent};font-size:34pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(initials)}</div>`;
+      photoHtml = `<table role="presentation" style="width:110px;height:138px;border-collapse:collapse;background-color:${theme.chipBg};border:0.75pt solid ${theme.rule};"><tr><td style="text-align:center;vertical-align:middle;color:${theme.accent};font-size:38pt;font-weight:bold;font-family:Helvetica,Arial,sans-serif;">${escapeHtml(initials)}</td></tr></table>`;
     }
 
-    // Use a 2-column HTML table for the header layout
-    html += `<table style="width:100%;border-collapse:collapse;font-family:Helvetica,Arial,sans-serif;margin-bottom:6pt;"><tr>`;
-    html += `<td style="width:75%;vertical-align:top;padding:0 14pt 0 0;">`;
-    html += `<div style="font-size:22pt;font-weight:bold;color:${theme.ink};">${escapeHtml(fullName)}</div>`;
+    // Build LEFT cell: name, target, rule1, contacts, personal details, rule2
+    let leftHtml = '';
+    leftHtml += `<div style="font-size:22pt;font-weight:bold;color:${theme.ink};">${escapeHtml(fullName)}</div>`;
+    // Target role (ABOVE rule 1, below name)
     if (targetRole) {
-      html += `<div style="font-size:11pt;font-weight:bold;color:${theme.accent};margin-top:4pt;">${escapeHtml(targetRole)}</div>`;
+      leftHtml += `<div style="font-size:11pt;font-weight:bold;color:${theme.accent};margin-top:4pt;margin-bottom:4pt;">${escapeHtml(targetRole)}</div>`;
     }
-    html += `</td>`;
+    // Rule 1 (spans left column only — right column has the photo)
+    leftHtml += `<div style="border-top:0.75pt solid ${theme.rule};margin:6pt 0 6pt 0;font-size:1pt;">&nbsp;</div>`;
+    // Contact icons
+    leftHtml += buildContactIconsRow(resumeData, { ...theme, headerAlign: 'left' });
+    // Personal details
+    const personalLines = [
+      safeText(resumeData.nationality) ? `Nationality: ${escapeHtml(safeText(resumeData.nationality))}` : '',
+      safeText(resumeData.dateOfBirth) ? `Date of birth: ${escapeHtml(safeText(resumeData.dateOfBirth))}` : '',
+      safeText(resumeData.placeOfBirth) ? `Place of birth: ${escapeHtml(safeText(resumeData.placeOfBirth))}` : '',
+    ].filter(Boolean);
+    personalLines.forEach((line) => {
+      leftHtml += `<div style="font-size:9pt;color:${theme.muted};margin-bottom:2pt;">${line}</div>`;
+    });
+    // Rule 2
+    leftHtml += `<div style="border-top:0.75pt solid ${theme.rule};margin:6pt 0 0 0;font-size:1pt;">&nbsp;</div>`;
+
+    // 2-column table: left = details, right = photo
+    html += `<table style="width:100%;border-collapse:collapse;font-family:Helvetica,Arial,sans-serif;margin-bottom:6pt;"><tr>`;
+    html += `<td style="width:75%;vertical-align:top;padding:0 14pt 0 0;">${leftHtml}</td>`;
     html += `<td style="width:25%;vertical-align:top;text-align:right;">${photoHtml}</td>`;
     html += `</tr></table>`;
+    // Return immediately — contacts and personal details are already inside the table
+    return html;
   } else if (isAcademic) {
     // Academic: centered name + centered thin rule
     html += `<div style="text-align:center;font-family:Helvetica,Arial,sans-serif;margin-bottom:6pt;">`;
@@ -187,6 +218,12 @@ function buildHeader(resumeData, theme) {
       html += `<div style="font-size:11pt;font-weight:bold;color:${theme.accent};margin-top:2pt;">${escapeHtml(targetRole)}</div>`;
     }
     html += `</div>`;
+  } else if (isEuropean) {
+    html += `<table role="presentation" style="width:100%;border-collapse:collapse;background-color:${theme.accent};margin-bottom:8pt;font-family:Helvetica,Arial,sans-serif;"><tr><td style="padding:12pt 14pt;color:#FFFFFF;font-size:20pt;font-weight:bold;">${escapeHtml(fullName)}`;
+    if (targetRole) {
+      html += `<div style="margin-top:4pt;color:#DDEEF8;font-size:10.5pt;font-weight:bold;">${escapeHtml(targetRole)}</div>`;
+    }
+    html += `</td></tr></table>`;
   } else {
     // Standard left-aligned header
     html += `<div style="text-align:${align};font-family:Helvetica,Arial,sans-serif;margin-bottom:6pt;">`;
@@ -197,8 +234,8 @@ function buildHeader(resumeData, theme) {
     html += `</div>`;
   }
 
-  // academic personal details line
-  if (isAcademic || isAcademicPhoto) {
+  // academic personal details line (only for eu-academic — academic-photo handles its own)
+  if (isAcademic) {
     const parts = [
       safeText(resumeData.nationality) ? `Nationality: ${escapeHtml(safeText(resumeData.nationality))}` : '',
       safeText(resumeData.dateOfBirth) ? `Date of birth: ${escapeHtml(safeText(resumeData.dateOfBirth))}` : '',
@@ -209,8 +246,10 @@ function buildHeader(resumeData, theme) {
     }
   }
 
-  // contact icons (no visible text — only hyperlinked Unicode glyphs)
-  html += buildContactIconsRow(resumeData, theme);
+  // contact icons — only for non-academic-photo templates (academic-photo handles its own)
+  if (!isAcademicPhoto) {
+    html += buildContactIconsRow(resumeData, theme);
+  }
 
   return html;
 }
@@ -228,10 +267,10 @@ function buildSectionHeading(title, theme) {
 
   if (theme.headingStyle === 'technical') {
     // Technical: accent bar (5px) on left + chip background
-    return `<div style="margin-top:14pt;margin-bottom:6pt;${fontFamily}display:flex;align-items:center;">` +
-           `<span style="background-color:${theme.accent};width:5pt;height:18pt;display:inline-block;margin-right:6pt;">&nbsp;</span>` +
-           `<span style="background-color:${theme.chipBg};padding:3pt 8pt;color:${theme.ink};font-size:12pt;font-weight:bold;flex:1;">${text}</span>` +
-           `</div>`;
+    return `<table role="presentation" style="width:100%;border-collapse:collapse;margin-top:14pt;margin-bottom:6pt;${fontFamily}"><tr>` +
+           `<td style="width:5pt;background-color:${theme.accent};font-size:1pt;">&nbsp;</td>` +
+           `<td style="background-color:${theme.chipBg};padding:3pt 8pt;color:${theme.ink};font-size:12pt;font-weight:bold;">${text}</td>` +
+           `</tr></table>`;
   }
 
   if (theme.headingStyle === 'academic') {
@@ -269,21 +308,21 @@ function buildBullet(text, theme) {
 
 function buildHeadingRow(leftText, rightText, theme) {
   const left = escapeHtml(safeText(leftText));
-  const right = rightText ? `<span style="float:right;color:${theme.body};">${escapeHtml(safeText(rightText))}</span>` : '';
-  return `<div style="font-size:11pt;font-weight:bold;color:${theme.body};font-family:Helvetica,Arial,sans-serif;margin-bottom:1pt;overflow:hidden;">${left}${right}</div>`;
+  const right = escapeHtml(safeText(rightText));
+  return `<table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 1pt 0;font-family:Helvetica,Arial,sans-serif;"><tr><td style="width:72%;vertical-align:top;font-size:11pt;font-weight:bold;color:${theme.body};word-wrap:break-word;">${left}</td><td style="width:28%;vertical-align:top;text-align:right;font-size:11pt;font-weight:bold;color:${theme.body};word-wrap:break-word;">${right}</td></tr></table>`;
 }
 
 function buildSubheadingRow(leftText, rightText, theme) {
-  const left = leftText ? `<span style="color:${theme.accent};font-weight:bold;">${escapeHtml(safeText(leftText))}</span>` : '';
-  const right = rightText ? `<span style="float:right;color:${theme.body};">${escapeHtml(safeText(rightText))}</span>` : '';
+  const left = leftText ? escapeHtml(safeText(leftText)) : '';
+  const right = rightText ? escapeHtml(safeText(rightText)) : '';
   if (!left && !right) return '';
-  return `<div style="font-size:9.5pt;font-family:Helvetica,Arial,sans-serif;margin-bottom:1pt;overflow:hidden;">${left}${right}</div>`;
+  return `<table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 1pt 0;font-family:Helvetica,Arial,sans-serif;"><tr><td style="width:72%;vertical-align:top;font-size:9.5pt;font-weight:bold;color:${theme.accent};word-wrap:break-word;">${left}</td><td style="width:28%;vertical-align:top;text-align:right;font-size:9.5pt;color:${theme.body};word-wrap:break-word;">${right}</td></tr></table>`;
 }
 
 function buildMetaRow(leftText, rightText, theme) {
   const left = leftText ? escapeHtml(safeText(leftText)) : '';
-  const right = rightText ? `<span style="float:right;color:${theme.body};">${escapeHtml(safeText(rightText))}</span>` : '';
-  return `<div style="font-size:9pt;color:${theme.body};font-family:Helvetica,Arial,sans-serif;margin-bottom:3pt;overflow:hidden;">${left}${right}</div>`;
+  const right = rightText ? escapeHtml(safeText(rightText)) : '';
+  return `<table role="presentation" style="width:100%;border-collapse:collapse;table-layout:fixed;margin:0 0 3pt 0;font-family:Helvetica,Arial,sans-serif;"><tr><td style="width:65%;vertical-align:top;font-size:9pt;color:${theme.body};word-wrap:break-word;">${left}</td><td style="width:35%;vertical-align:top;text-align:right;font-size:9pt;color:${theme.body};word-wrap:break-word;">${right}</td></tr></table>`;
 }
 
 function buildSkillsSection(skills, theme) {
@@ -549,6 +588,7 @@ div.WordSection1 { page: WordSection1; }
 body { font-family: Helvetica, Arial, sans-serif; color: ${theme.body}; }
 p, div, ul, li { margin-top: 0; margin-bottom: 0; }
 ul { padding-left: 18pt; }
+table { page-break-inside: avoid; }
 </style>
 </head>
 <body>

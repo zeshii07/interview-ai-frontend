@@ -2,8 +2,6 @@ import React from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'react-native';
 
 import LoadingOverlay from '../../components/ui/LoadingOverlay';
 import useInterviewStore from '../../store/interviewStore';
@@ -37,8 +35,19 @@ export default function ResumeAnalyzeScreen() {
   }, []);
 
   const pickResume = async () => {
-    const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'], copyToCacheDirectory: true, multiple: false });
-    if (!result.canceled) { setFile(result.assets[0]); setAnalysis(null); }
+    try {
+      const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'], copyToCacheDirectory: true, multiple: false });
+      if (result.canceled || !result.assets?.[0]) return;
+      const selectedFile = result.assets[0];
+      if (selectedFile.size && selectedFile.size > 10 * 1024 * 1024) {
+        Alert.alert('File too large', 'Choose a resume smaller than 10 MB.');
+        return;
+      }
+      setFile(selectedFile);
+      setAnalysis(null);
+    } catch (error) {
+      Alert.alert('Could not select resume', error?.message || 'Please try again.');
+    }
   };
 
   const runAnalysis = async () => {

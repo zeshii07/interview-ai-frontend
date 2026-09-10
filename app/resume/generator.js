@@ -15,7 +15,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 
 import { resumeAPI } from '../../services/api';
 import useResumeBuilderStore from '../../store/resumeBuilderStore';
@@ -146,6 +145,7 @@ function buildPayload(draft) {
         degree: cleanText(item.degree),
         institution: cleanText(item.institution),
         location: cleanText(item.location),
+        startDate: cleanText(item.startDate),
         year: cleanText(item.year),
         gpa: cleanText(item.gpa),
       }))
@@ -210,21 +210,23 @@ export default function ResumeGeneratorScreen() {
         );
         return;
       }
+      // Use the new MediaType API (array of strings) and request base64 directly
+      // from the picker — avoids the deprecated readAsStringAsync call.
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [4, 5], // portrait, DAAD convention
         quality: 0.85,
-        base64: false,
+        base64: true,
       });
       if (result.canceled || !result.assets?.length) return;
       const asset = result.assets[0];
-      // Read the file as base64 so we can embed it in the PDF and send it to the backend
-      const base64 = await FileSystem.readAsStringAsync(asset.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      if (!asset.base64) {
+        Alert.alert('Could not load photo', 'The image could not be read. Please try a different photo.');
+        return;
+      }
       const mimeType = asset.mimeType || 'image/jpeg';
-      updateDraft('photoBase64', base64);
+      updateDraft('photoBase64', asset.base64);
       updateDraft('photoMimeType', mimeType);
     } catch (error) {
       Alert.alert('Could not load photo', error?.message || 'Please try again.');

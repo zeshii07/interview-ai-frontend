@@ -1,8 +1,6 @@
-import { fetch } from 'expo/fetch';
-import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { Alert } from 'react-native';
 
-import { API_BASE_URL } from '../constants/config';
 import {
   buildResumePdfBytes,
   buildResumeFilename,
@@ -21,54 +19,115 @@ function safeFilenamePart(value, fallback) {
   return cleaned || fallback;
 }
 
-async function readErrorMessage(response, fallback) {
-  try {
-    const data = await response.json();
-    return data?.message || data?.error || fallback;
-  } catch {
-    return fallback;
+/**
+ * Lazy-load expo-file-system's File and Paths. The new File/Directory API
+ * (SDK 53+) is imported dynamically to avoid crashing the app at startup
+ * if the API isn't available in the current Expo Go version.
+ */
+let _fsModule = null;
+async function getFs() {
+  if (_fsModule === null) {
+    try {
+      _fsModule = await import('expo-file-system');
+    } catch (err) {
+      console.warn('[resumeDownload] Could not load expo-file-system:', err?.message);
+      _fsModule = false;
+    }
   }
+  return _fsModule || null;
 }
 
 /**
- * Save raw bytes to the cache directory and trigger the share sheet.
- * Returns { uri, shared, source } where source is 'server' | 'local'.
+ * Write bytes to a file in the cache directory. Returns the file URI.
+ * Falls back to legacy API if the new File/Directory API isn't available.
  */
-async function saveAndShareFile(bytes, filename, mimeType, uti, dialogTitle) {
-  const file = new File(Paths.cache, filename);
+async function writeCacheFile(bytes, filename) {
+  const fs = await getFs();
+  if (!fs) throw new Error('File system not available');
 
-  if (file.exists) {
-    file.delete();
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+
+  // Try the new File/Directory API (SDK 53+)
+  if (fs.File && fs.Paths) {
+    try {
+      const file = new fs.File(fs.Paths.cache, filename);
+      if (file.exists) file.delete();
+      file.create();
+      file.write(data);
+      return file.uri;
+    } catch (err) {
+      console.warn('[resumeDownload] New File API failed, falling back to legacy:', err?.message);
+    }
   }
 
-  file.create();
-  file.write(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+  // Legacy API fallback
+  if (fs.writeAsStringAsync && fs.documentDirectory) {
+    const uri = `${fs.documentDirectory}${filename}`;
+    const base64 = bytesToBase64(data);
+    await fs.writeAsStringAsync(uri, base64, { encoding: fs.EncodingType.Base64 });
+    return uri;
+  }
 
+  throw new Error('No file system API available');
+}
+
+/**
+ * Open the system share sheet.
+ */
+async function openShareSheet(fileUri, mimeType, uti, dialogTitle) {
   const canShare = await Sharing.isAvailableAsync();
-
   if (!canShare) {
-    return { uri: file.uri, shared: false, source: 'local' };
+    Alert.alert('File created', `The file was saved at:\n${fileUri}`);
+    return { uri: fileUri, shared: false, source: 'local' };
   }
 
-  await Sharing.shareAsync(file.uri, {
+  await Sharing.shareAsync(fileUri, {
     mimeType,
     dialogTitle: dialogTitle || 'Save or share your Hirely resume',
     UTI: uti,
   });
 
-  return { uri: file.uri, shared: true, source: 'local' };
+  return { uri: fileUri, shared: true, source: 'local' };
+}
+
+/**
+ * Open the system save/share sheet after writing the file to cache.
+ *
+ * Expo's sandbox has no public Downloads directory. Pretending otherwise
+ * stores a file in private app storage where users cannot find it. The
+ * platform sheet is the supported path: Android users can select Files or a
+ * Downloads-capable app, while iOS users can select Save to Files.
+ */
+async function saveOrShareFile(bytes, filename, mimeType, uti, dialogTitle) {
+  const cacheUri = await writeCacheFile(bytes, filename);
+
+  return new Promise((resolve, reject) => {
+    Alert.alert(
+      dialogTitle || 'Save your resume',
+      'Choose Save / Share, then select where to keep your file.',
+      [
+        {
+          text: 'Save / Share',
+          onPress: async () => {
+            try {
+              resolve(await openShareSheet(cacheUri, mimeType, uti, dialogTitle));
+            } catch (error) {
+              reject(error);
+            }
+          },
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => resolve({ uri: cacheUri, shared: false, savedToDisk: false, source: 'local' }),
+        },
+      ]
+    );
+  });
 }
 
 // ---------- PDF ----------
 
-/**
- * Generate and share a resume PDF.
- *
- * Strategy:
- *   1. Try the backend `/api/resume/pdf` endpoint (server-rendered PDF).
- *   2. On ANY failure (network, 5xx, model error, timeout) fall back to
- *      local PDF generation with pdf-lib using the exact same resume data.
- */
 export async function generateAndShareResumePdf(resume) {
   if (!resume) {
     throw new Error('No resume is available.');
@@ -78,204 +137,34 @@ export async function generateAndShareResumePdf(resume) {
   const lastName = safeFilenamePart(resume.lastName, 'Resume');
   const filename = `${firstName}_${lastName}_Hirely_Resume.pdf`;
 
-  // Step 1 — try the backend.
-  let backendError = null;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch(`${API_BASE_URL}/api/resume/pdf`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/pdf',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(resume),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const bytes = await response.bytes();
-      const file = new File(Paths.cache, filename);
-
-      if (file.exists) {
-        file.delete();
-      }
-
-      file.create();
-      file.write(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
-
-      const canShare = await Sharing.isAvailableAsync();
-
-      if (!canShare) {
-        return { uri: file.uri, shared: false, source: 'server' };
-      }
-
-      await Sharing.shareAsync(file.uri, {
-        mimeType: 'application/pdf',
-        dialogTitle: 'Save or share your Hirely resume',
-        UTI: 'com.adobe.pdf',
-      });
-
-      return { uri: file.uri, shared: true, source: 'server' };
-    }
-
-    backendError = new Error(await readErrorMessage(response, 'Failed to generate PDF.'));
-  } catch (error) {
-    backendError = error;
-  }
-
-  // Step 2 — fall back to local rendering.
-  console.warn(
-    '[resumeDownload] Backend PDF endpoint unavailable, using local fallback:',
-    backendError?.message || backendError
-  );
-
-  const localBytes = await buildResumePdfBytes(resume);
-  const result = await saveAndShareFile(
-    localBytes,
-    filename,
-    'application/pdf',
-    'com.adobe.pdf',
-    'Save or share your Hirely resume (PDF)'
-  );
-  return { ...result, fallbackReason: backendError?.message || 'Network error' };
-}
-
-/**
- * Local-only entry point for PDF. Skips the server entirely.
- */
-export async function generateLocalResumePdf(resume) {
-  if (!resume) {
-    throw new Error('No resume is available.');
-  }
-
-  const filename = buildResumeFilename(resume);
   const bytes = await buildResumePdfBytes(resume);
-  return saveAndShareFile(
+  return saveOrShareFile(
     bytes,
     filename,
     'application/pdf',
     'com.adobe.pdf',
-    'Save or share your Hirely resume (PDF)'
+    'Save your resume (PDF)'
   );
 }
+
+export const generateLocalResumePdf = generateAndShareResumePdf;
 
 // ---------- DOCX ----------
 
-const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-const DOCX_UTI = 'org.openxmlformats.wordprocessingml.document';
-const DOC_MIME = 'application/msword';
-const DOC_UTI = 'com.microsoft.word.doc';
-
-/**
- * Generate and share a resume DOCX (Word document).
- *
- * Strategy:
- *   1. Try the backend `/api/resume/docx` endpoint (real .docx via the `docx`
- *      npm package).
- *   2. On ANY failure (network, 5xx, timeout) fall back to local generation
- *      using a Word-compatible HTML file saved with .doc extension. Word,
- *      LibreOffice, Google Docs, and Pages all open this format natively.
- */
 export async function generateAndShareResumeDocx(resume) {
-  if (!resume) {
-    throw new Error('No resume is available.');
-  }
-
-  const firstName = safeFilenamePart(resume.firstName, 'Candidate');
-  const lastName = safeFilenamePart(resume.lastName, 'Resume');
-  const docxFilename = `${firstName}_${lastName}_Hirely_Resume.docx`;
-  const docFilename = `${firstName}_${lastName}_Hirely_Resume.doc`;
-
-  // Step 1 — try the backend.
-  let backendError = null;
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-
-    const response = await fetch(`${API_BASE_URL}/api/resume/docx`, {
-      method: 'POST',
-      headers: {
-        Accept: DOCX_MIME,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(resume),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeoutId);
-
-    if (response.ok) {
-      const bytes = await response.bytes();
-      const file = new File(Paths.cache, docxFilename);
-
-      if (file.exists) {
-        file.delete();
-      }
-
-      file.create();
-      file.write(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
-
-      const canShare = await Sharing.isAvailableAsync();
-
-      if (!canShare) {
-        return { uri: file.uri, shared: false, source: 'server', format: 'docx' };
-      }
-
-      await Sharing.shareAsync(file.uri, {
-        mimeType: DOCX_MIME,
-        dialogTitle: 'Save or share your Hirely resume (Word)',
-        UTI: DOCX_UTI,
-      });
-
-      return { uri: file.uri, shared: true, source: 'server', format: 'docx' };
-    }
-
-    backendError = new Error(await readErrorMessage(response, 'Failed to generate DOCX.'));
-  } catch (error) {
-    backendError = error;
-  }
-
-  // Step 2 — fall back to local rendering (Word-compatible HTML .doc).
-  console.warn(
-    '[resumeDownload] Backend DOCX endpoint unavailable, using local fallback:',
-    backendError?.message || backendError
-  );
-
-  const localBytes = await buildResumeDocBytes(resume);
-  const result = await saveAndShareFile(
-    localBytes,
-    docFilename,
-    DOC_MIME,
-    DOC_UTI,
-    'Save or share your Hirely resume (Word)'
-  );
-  return {
-    ...result,
-    format: 'doc',
-    fallbackReason: backendError?.message || 'Network error',
-  };
-}
-
-/**
- * Local-only entry point for DOCX. Skips the server entirely and renders a
- * Word-compatible .doc file on-device.
- */
-export async function generateLocalResumeDocx(resume) {
   if (!resume) {
     throw new Error('No resume is available.');
   }
 
   const filename = buildResumeDocFilename(resume);
   const bytes = await buildResumeDocBytes(resume);
-  return saveAndShareFile(
+  return saveOrShareFile(
     bytes,
     filename,
-    DOC_MIME,
-    DOC_UTI,
-    'Save or share your Hirely resume (Word)'
+    'application/msword',
+    'com.microsoft.word.doc',
+    'Save your resume (Word document)'
   );
 }
+
+export const generateLocalResumeDocx = generateAndShareResumeDocx;

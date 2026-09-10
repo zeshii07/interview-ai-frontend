@@ -94,6 +94,24 @@ function wrapText(text, font, fontSize, maxWidth) {
   return lines;
 }
 
+function fitText(text, font, fontSize, maxWidth) {
+  const value = safeText(text);
+  if (!value || font.widthOfTextAtSize(value, fontSize) <= maxWidth) {
+    return value;
+  }
+
+  const ellipsis = '...';
+  let end = value.length;
+  while (end > 0) {
+    const candidate = `${value.slice(0, end).trimEnd()}${ellipsis}`;
+    if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+      return candidate;
+    }
+    end -= 1;
+  }
+  return ellipsis;
+}
+
 // ---------- templates ----------
 
 const COLOR_PALETTE = {
@@ -187,6 +205,14 @@ function getTheme(templateId) {
 }
 
 // ---------- layout primitives ----------
+//
+// IMPORTANT: This canvas tracks the cursor Y in TOP-DOWN coordinates
+// (y=0 is the top of the page, y increases downward). But pdf-lib uses
+// BOTTOM-UP coordinates (y=0 is the bottom, y increases upward).
+// Every draw method converts top-down Y to pdf-lib Y via:
+//   pdfY = pageHeight - topDownY - elementHeight
+// This makes the layout code intuitive (like CSS/HTML) while still
+// producing correct PDFs.
 
 class ResumeCanvas {
   constructor(doc, theme, fonts) {
@@ -201,7 +227,22 @@ class ResumeCanvas {
     this.y = this.margins.top;
   }
 
+  // Convert top-down Y to pdf-lib bottom-up Y for a text baseline.
+  // `textSize` is the font size — the baseline sits `size` below the top
+  // of the text box, so pdfY = pageHeight - y - size.
+  toPdfY_text(topDownY, textSize) {
+    return this.pageHeight - topDownY - textSize;
+  }
+
+  // Convert top-down Y to pdf-lib Y for a rectangle.
+  // The rectangle's top is at `topDownY`, so its bottom-left corner is at
+  // `topDownY + height`, giving pdfY = pageHeight - (topDownY + height).
+  toPdfY_rect(topDownY, height) {
+    return this.pageHeight - topDownY - height;
+  }
+
   pageBottom() {
+    // In top-down coords, the bottom of the content area
     return this.pageHeight - this.margins.bottom - 18;
   }
 
@@ -222,7 +263,7 @@ class ResumeCanvas {
     return this.currentFont(bold).widthOfTextAtSize(value, fontSize);
   }
 
-  // Draw a left-aligned line at the current cursor (does NOT move down).
+  // Draw text. `y` is in top-down coords (the TOP of the text box).
   drawText(value, options = {}) {
     const {
       size = 10,
@@ -241,17 +282,22 @@ class ResumeCanvas {
 
     if (maxWidth && align === 'left') {
       const lines = wrapText(value, font, size, maxWidth);
+      let cursorY = y;
       lines.forEach((line) => {
-        this.ensureSpace(size + 3);
+        if (cursorY + size + 3 > this.pageBottom()) {
+          this.addPage();
+          cursorY = this.y;
+        }
         this.page.drawText(line || '', {
           x,
-          y: this.y,
+          y: this.toPdfY_text(cursorY, size),
           size,
           font,
           color: colorRgb,
         });
-        this.y -= size + 3;
+        cursorY += size + 3;
       });
+      this.y = cursorY;
     } else {
       this.ensureSpace(size + 3);
       let drawX = x;
@@ -262,7 +308,7 @@ class ResumeCanvas {
       }
       this.page.drawText(value, {
         x: drawX,
-        y,
+        y: this.toPdfY_text(y, size),
         size,
         font,
         color: colorRgb,
@@ -270,21 +316,27 @@ class ResumeCanvas {
     }
   }
 
+  // Draw a horizontal line at top-down Y.
   drawLine(x1, y1, x2, y2, color, thickness = 1) {
     const colorRgb = typeof color === 'string' ? hexToColor(color) : color;
+    // For horizontal lines, y1 === y2. Convert to pdf-lib Y (no height offset
+    // for a zero-thickness line — just flip the Y).
+    const pdfY1 = this.pageHeight - y1;
+    const pdfY2 = this.pageHeight - y2;
     this.page.drawLine({
-      start: { x: x1, y: y1 },
-      end: { x: x2, y: y2 },
+      start: { x: x1, y: pdfY1 },
+      end: { x: x2, y: pdfY2 },
       thickness,
       color: colorRgb,
     });
   }
 
+  // Draw a rectangle. `x, y` is the TOP-LEFT corner in top-down coords.
   drawRect(x, y, width, height, color, options = {}) {
     const colorRgb = typeof color === 'string' ? hexToColor(color) : color;
     this.page.drawRectangle({
       x,
-      y,
+      y: this.toPdfY_rect(y, height),
       width,
       height,
       color: colorRgb,
@@ -297,7 +349,28 @@ class ResumeCanvas {
     });
   }
 
+  // Draw a circle. `x, y` is the center in top-down coords.
+  drawCircle(cx, cy, radius, color, options = {}) {
+    const colorRgb = typeof color === 'string' ? hexToColor(color) : color;
+    this.page.drawCircle({
+      x: cx,
+      y: this.pageHeight - cy,
+      size: radius,
+      color: colorRgb,
+      borderColor: options.borderColor
+        ? typeof options.borderColor === 'string'
+          ? hexToColor(options.borderColor)
+          : options.borderColor
+        : undefined,
+      borderWidth: options.borderWidth || 0,
+    });
+  }
+
   moveDown(amount = 12) {
+    this.y += amount;  // top-down: y increases as we move down
+  }
+
+  moveUp(amount = 12) {
     this.y -= amount;
   }
 }
@@ -313,7 +386,7 @@ function addSectionHeading(canvas, title) {
   if (theme.headingStyle === 'band') {
     canvas.drawRect(
       canvas.margins.left,
-      y - 6,
+      y,
       canvas.contentWidth,
       20,
       theme.blue
@@ -323,14 +396,14 @@ function addSectionHeading(canvas, title) {
       bold: true,
       color: '#FFFFFF',
       x: canvas.margins.left + 8,
-      y: y - 2,
+      y: y + 4,
     });
-    canvas.moveDown(20 + 6);
+    canvas.moveDown(26);
   } else if (theme.headingStyle === 'technical') {
-    canvas.drawRect(canvas.margins.left, y - 6, 4, 20, theme.blue);
+    canvas.drawRect(canvas.margins.left, y, 4, 20, theme.blue);
     canvas.drawRect(
       canvas.margins.left + 4,
-      y - 6,
+      y,
       canvas.contentWidth - 4,
       20,
       theme.chip
@@ -340,9 +413,9 @@ function addSectionHeading(canvas, title) {
       bold: true,
       color: theme.ink,
       x: canvas.margins.left + 10,
-      y: y - 2,
+      y: y + 4,
     });
-    canvas.moveDown(20 + 6);
+    canvas.moveDown(26);
   } else if (theme.headingStyle === 'academic') {
     // Europass-style: uppercase heading with a thin colored rule beneath
     canvas.drawText(title.toUpperCase(), {
@@ -352,7 +425,7 @@ function addSectionHeading(canvas, title) {
       x: canvas.margins.left,
       y,
     });
-    const lineY = y - 14;
+    const lineY = y + 14;
     canvas.drawLine(
       canvas.margins.left,
       lineY,
@@ -361,7 +434,7 @@ function addSectionHeading(canvas, title) {
       theme.rule,
       0.75
     );
-    canvas.moveDown(22);
+    canvas.moveDown(18);
   } else {
     canvas.drawText(title.toUpperCase(), {
       size: 12,
@@ -370,7 +443,7 @@ function addSectionHeading(canvas, title) {
       x: canvas.margins.left,
       y,
     });
-    const lineY = y - 14;
+    const lineY = y + 14;
     canvas.drawLine(
       canvas.margins.left,
       lineY,
@@ -379,7 +452,7 @@ function addSectionHeading(canvas, title) {
       theme.rule,
       theme.headingStyle === 'european' ? 1 : 1.5
     );
-    canvas.moveDown(20);
+    canvas.moveDown(18);
   }
 }
 
@@ -391,7 +464,7 @@ function addParagraph(canvas, value, options = {}) {
     color: options.color || canvas.theme.body,
     maxWidth: options.width || canvas.contentWidth,
   });
-  canvas.moveDown(4);
+  canvas.moveDown(3);
 }
 
 function addBulletPoint(canvas, value) {
@@ -404,113 +477,147 @@ function addBulletPoint(canvas, value) {
   // bullet dot — aligned to the first line's baseline
   canvas.ensureSpace(12);
   const dotX = canvas.margins.left + 2;
-  const dotY = canvas.y - 8;
+  const dotY = canvas.y + 4;  // center of bullet dot, top-down
   canvas.page.drawCircle({
     x: dotX,
-    y: dotY,
+    y: canvas.pageHeight - dotY,  // convert to pdf-lib Y
     size: 1.6,
     color: hexToColor(canvas.theme.body),
   });
 
-  wrapped.forEach((line, index) => {
+  wrapped.forEach((line) => {
     canvas.ensureSpace(12);
     canvas.page.drawText(line || '', {
       x: canvas.margins.left + 12,
-      y: canvas.y - 8,
+      y: canvas.toPdfY_text(canvas.y, 9.5),  // convert top-down Y to pdf-lib Y
       size: 9.5,
       font,
       color: hexToColor(canvas.theme.body),
     });
-    if (index < wrapped.length - 1) {
-      canvas.y -= 12;
-    }
+    canvas.y += 11;
   });
-  canvas.moveDown(12);
+  canvas.moveDown(3);
 }
 
 function addHeadingRow(canvas, leftText, rightText) {
-  canvas.ensureSpace(20);
+  canvas.ensureSpace(16);
   const leftWidth = canvas.contentWidth * 0.72;
   const rightWidth = canvas.contentWidth * 0.28;
-  if (leftText) {
-    canvas.drawText(leftText, {
-      size: 11,
-      bold: true,
-      color: canvas.theme.body,
+  const startY = canvas.y;  // capture y BEFORE drawing either text
+  const leftValue = fitText(
+    leftText,
+    canvas.currentFont(true),
+    11,
+    leftWidth - 6
+  );
+  const rightValue = fitText(
+    rightText,
+    canvas.currentFont(true),
+    11,
+    rightWidth
+  );
+
+  if (leftValue) {
+    canvas.page.drawText(leftValue, {
       x: canvas.margins.left,
-      y: canvas.y,
-      maxWidth: leftWidth,
-    });
-  }
-  if (rightText) {
-    canvas.drawText(rightText, {
+      y: canvas.toPdfY_text(startY, 11),
       size: 11,
-      bold: true,
-      color: canvas.theme.body,
-      x: canvas.margins.left + leftWidth,
-      y: canvas.y,
-      maxWidth: rightWidth,
-      align: 'right',
+      font: canvas.currentFont(true),
+      color: hexToColor(canvas.theme.body),
     });
   }
-  // estimate consumed height
-  const leftLines = leftText
-    ? wrapText(leftText, canvas.currentFont(true), 11, leftWidth).length
-    : 0;
-  canvas.moveDown(14 + (leftLines > 1 ? (leftLines - 1) * 12 : 0));
+  if (rightValue) {
+    // Draw right text right-aligned at the same y
+    const rightTextWidth = canvas.textWidth(rightValue, 11, true);
+    canvas.page.drawText(rightValue, {
+      x: canvas.margins.left + leftWidth + rightWidth - rightTextWidth,
+      y: canvas.toPdfY_text(startY, 11),
+      size: 11,
+      font: canvas.currentFont(true),
+      color: hexToColor(canvas.theme.body),
+    });
+  }
+  canvas.y = startY + 14;  // move down once
 }
 
 function addSubheadingRow(canvas, leftText, rightText) {
-  canvas.ensureSpace(18);
+  canvas.ensureSpace(14);
   const leftWidth = canvas.contentWidth * 0.72;
   const rightWidth = canvas.contentWidth * 0.28;
-  if (leftText) {
-    canvas.drawText(leftText, {
-      size: 9.2,
-      bold: true,
-      color: canvas.theme.blue,
+  const startY = canvas.y;
+  const leftValue = fitText(
+    leftText,
+    canvas.currentFont(true),
+    9.2,
+    leftWidth - 6
+  );
+  const rightValue = fitText(
+    rightText,
+    canvas.currentFont(false),
+    8.8,
+    rightWidth
+  );
+
+  if (leftValue) {
+    canvas.page.drawText(leftValue, {
       x: canvas.margins.left,
-      y: canvas.y,
-      maxWidth: leftWidth,
+      y: canvas.toPdfY_text(startY, 9.2),
+      size: 9.2,
+      font: canvas.currentFont(true),
+      color: hexToColor(canvas.theme.blue),
     });
   }
-  if (rightText) {
-    canvas.drawText(rightText, {
+  if (rightValue) {
+    const rightTextWidth = canvas.textWidth(rightValue, 8.8, false);
+    canvas.page.drawText(rightValue, {
+      x: canvas.margins.left + leftWidth + rightWidth - rightTextWidth,
+      y: canvas.toPdfY_text(startY, 8.8),
       size: 8.8,
-      color: canvas.theme.body,
-      x: canvas.margins.left + leftWidth,
-      y: canvas.y,
-      maxWidth: rightWidth,
-      align: 'right',
+      font: canvas.currentFont(false),
+      color: hexToColor(canvas.theme.body),
     });
   }
-  canvas.moveDown(12);
+  canvas.y = startY + 12;
 }
 
 function addMetaRow(canvas, leftText, rightText) {
-  canvas.ensureSpace(14);
+  canvas.ensureSpace(12);
   const leftWidth = canvas.contentWidth * 0.65;
   const rightWidth = canvas.contentWidth * 0.35;
-  if (leftText) {
-    canvas.drawText(leftText, {
-      size: 8.8,
-      color: canvas.theme.body,
+  const startY = canvas.y;
+  const leftValue = fitText(
+    leftText,
+    canvas.currentFont(false),
+    8.8,
+    leftWidth - 6
+  );
+  const rightValue = fitText(
+    rightText,
+    canvas.currentFont(false),
+    8.8,
+    rightWidth
+  );
+
+  if (leftValue) {
+    canvas.page.drawText(leftValue, {
       x: canvas.margins.left,
-      y: canvas.y,
-      maxWidth: leftWidth,
-    });
-  }
-  if (rightText) {
-    canvas.drawText(rightText, {
+      y: canvas.toPdfY_text(startY, 8.8),
       size: 8.8,
-      color: canvas.theme.body,
-      x: canvas.margins.left + leftWidth,
-      y: canvas.y,
-      maxWidth: rightWidth,
-      align: 'right',
+      font: canvas.currentFont(false),
+      color: hexToColor(canvas.theme.body),
     });
   }
-  canvas.moveDown(11);
+  if (rightValue) {
+    const rightTextWidth = canvas.textWidth(rightValue, 8.8, false);
+    canvas.page.drawText(rightValue, {
+      x: canvas.margins.left + leftWidth + rightWidth - rightTextWidth,
+      y: canvas.toPdfY_text(startY, 8.8),
+      size: 8.8,
+      font: canvas.currentFont(false),
+      color: hexToColor(canvas.theme.body),
+    });
+  }
+  canvas.y = startY + 11;
 }
 
 function addSkills(canvas, skills) {
@@ -529,23 +636,29 @@ function addSkills(canvas, skills) {
   const chipHeight = 17;
 
   values.forEach((skill) => {
-    const textWidth = canvas.textWidth(skill, 9, false);
+    const displaySkill = fitText(skill, canvas.currentFont(false), 9, 128);
+    const textWidth = canvas.textWidth(displaySkill, 9, false);
     const chipWidth = Math.min(textWidth + padding, 150);
     if (x + chipWidth > right) {
       x = left;
-      canvas.moveDown(lineHeight + 5);
+      canvas.moveDown(lineHeight);
     }
-    const chipY = canvas.y - chipHeight;
+    if (canvas.y + chipHeight > canvas.pageBottom()) {
+      canvas.addPage();
+      x = left;
+    }
+    const chipY = canvas.y;  // top of chip (top-down coords)
     canvas.drawRect(x, chipY, chipWidth, chipHeight, canvas.theme.chip);
-    canvas.drawText(skill, {
-      size: 9,
-      color: canvas.theme.blue,
+    canvas.page.drawText(displaySkill, {
       x: x + 11,
-      y: chipY + 5,
+      y: canvas.toPdfY_text(chipY + 4, 9),
+      size: 9,
+      font: canvas.currentFont(false),
+      color: hexToColor(canvas.theme.blue),
     });
     x += chipWidth + 9;
   });
-  canvas.moveDown(lineHeight + 8);
+  canvas.moveDown(lineHeight + 4);
 }
 
 function addCustomSection(canvas, section) {
@@ -688,7 +801,7 @@ function formatEducationDateRange(startDate, endDate) {
   return '';
 }
 
-// ---------- contact icons (no visible text, with hyperlinks) ----------
+// ---------- contact details (visible text, icons, and hyperlinks) ----------
 
 /**
  * Draw a small vector icon for a contact type. Mirrors the backend PDF.
@@ -696,38 +809,44 @@ function formatEducationDateRange(startDate, endDate) {
  */
 function drawContactIcon(canvas, type, x, y) {
   const page = canvas.page;
+  const ph = canvas.pageHeight;
   const theme = canvas.theme;
   const color = hexToColor(theme.blue);
+  // `y` is top-down from caller. Convert each Y to pdf-lib bottom-up Y.
+  // For rectangles: pdfY = ph - (topDownY + height)
+  // For lines/circles/text: pdfY = ph - topDownY
 
   if (type === 'email') {
-    page.drawRectangle({ x, y: y + 1, width: 9, height: 7, borderColor: color, borderWidth: 0.8 });
-    page.drawLine({ start: { x, y: y + 1 }, end: { x: x + 4.5, y: y + 5 }, thickness: 0.8, color });
-    page.drawLine({ start: { x: x + 9, y: y + 1 }, end: { x: x + 4.5, y: y + 5 }, thickness: 0.8, color });
+    page.drawRectangle({ x, y: ph - (y + 1) - 7, width: 9, height: 7, borderColor: color, borderWidth: 0.8 });
+    page.drawLine({ start: { x, y: ph - (y + 1) }, end: { x: x + 4.5, y: ph - (y + 5) }, thickness: 0.8, color });
+    page.drawLine({ start: { x: x + 9, y: ph - (y + 1) }, end: { x: x + 4.5, y: ph - (y + 5) }, thickness: 0.8, color });
   } else if (type === 'phone') {
-    // simplified phone: filled circle with two dots
-    page.drawCircle({ x: x + 4.5, y: y + 4.5, size: 3.7, borderColor: color, borderWidth: 0.8 });
-    page.drawCircle({ x: x + 1.2, y: y + 7.2, size: 1, color });
-    page.drawCircle({ x: x + 7.8, y: y + 1.8, size: 1, color });
+    // Smartphone outline — universally recognizable
+    page.drawRectangle({ x: x + 2, y: ph - (y + 0.5) - 8, width: 5, height: 8, borderColor: color, borderWidth: 0.8 });
+    // Earpiece line at top
+    page.drawLine({ start: { x: x + 3.3, y: ph - (y + 2) }, end: { x: x + 5.7, y: ph - (y + 2) }, thickness: 0.8, color });
+    // Home button dot at bottom
+    page.drawCircle({ x: x + 4.5, y: ph - (y + 7.2), size: 0.5, color });
   } else if (type === 'location') {
-    page.drawCircle({ x: x + 4.5, y: y + 3.5, size: 3.3, borderColor: color, borderWidth: 0.8 });
-    page.drawCircle({ x: x + 4.5, y: y + 3.5, size: 1.1, borderColor: color, borderWidth: 0.8 });
-    page.drawLine({ start: { x: x + 2.2, y: y + 6 }, end: { x: x + 4.5, y: y + 9 }, thickness: 0.8, color });
-    page.drawLine({ start: { x: x + 6.8, y: y + 6 }, end: { x: x + 4.5, y: y + 9 }, thickness: 0.8, color });
+    page.drawCircle({ x: x + 4.5, y: ph - (y + 3.5), size: 3.3, borderColor: color, borderWidth: 0.8 });
+    page.drawCircle({ x: x + 4.5, y: ph - (y + 3.5), size: 1.1, borderColor: color, borderWidth: 0.8 });
+    page.drawLine({ start: { x: x + 2.2, y: ph - (y + 6) }, end: { x: x + 4.5, y: ph - (y + 9) }, thickness: 0.8, color });
+    page.drawLine({ start: { x: x + 6.8, y: ph - (y + 6) }, end: { x: x + 4.5, y: ph - (y + 9) }, thickness: 0.8, color });
   } else if (type === 'linkedin') {
-    page.drawRectangle({ x, y, width: 9, height: 9, color });
+    page.drawRectangle({ x, y: ph - y - 9, width: 9, height: 9, color });
     page.drawText('in', {
-      x: x + 1.6, y: y + 1.8, size: 5.5, font: canvas.fonts.bold, color: hexToColor('#FFFFFF'),
+      x: x + 1.6, y: ph - (y + 1.8) - 5.5, size: 5.5, font: canvas.fonts.bold, color: hexToColor('#FFFFFF'),
     });
   } else if (type === 'github') {
-    page.drawCircle({ x: x + 4.5, y: y + 4.5, size: 4.2, borderColor: color, borderWidth: 0.8 });
+    page.drawCircle({ x: x + 4.5, y: ph - (y + 4.5), size: 4.2, borderColor: color, borderWidth: 0.8 });
     page.drawText('GH', {
-      x: x + 1.1, y: y + 2.1, size: 4.5, font: canvas.fonts.bold, color,
+      x: x + 1.1, y: ph - (y + 2.1) - 4.5, size: 4.5, font: canvas.fonts.bold, color,
     });
   } else {
     // portfolio: two linked circles
-    page.drawCircle({ x: x + 3, y: y + 4.5, size: 2.5, borderColor: color, borderWidth: 0.8 });
-    page.drawCircle({ x: x + 7, y: y + 4.5, size: 2.5, borderColor: color, borderWidth: 0.8 });
-    page.drawLine({ start: { x: x + 3.5, y: y + 4.5 }, end: { x: x + 6.5, y: y + 4.5 }, thickness: 0.8, color });
+    page.drawCircle({ x: x + 3, y: ph - (y + 4.5), size: 2.5, borderColor: color, borderWidth: 0.8 });
+    page.drawCircle({ x: x + 7, y: ph - (y + 4.5), size: 2.5, borderColor: color, borderWidth: 0.8 });
+    page.drawLine({ start: { x: x + 3.5, y: ph - (y + 4.5) }, end: { x: x + 6.5, y: ph - (y + 4.5) }, thickness: 0.8, color });
   }
 }
 
@@ -740,32 +859,45 @@ function addContactIconsRow(canvas, resumeData) {
   const portfolio = safeText(resumeData.portfolio);
 
   const items = [
-    { type: 'email',    link: email ? `mailto:${email}` : '' },
-    { type: 'phone',    link: phone ? `tel:${phone.replace(/\s+/g, '')}` : '' },
-    { type: 'location', link: '' },
-    { type: 'linkedin', link: linkedin ? (linkedin.startsWith('http') ? linkedin : `https://${linkedin}`) : '' },
-    { type: 'github',   link: github ? (github.startsWith('http') ? github : `https://${github}`) : '' },
-    { type: 'portfolio',link: portfolio ? (portfolio.startsWith('http') ? portfolio : `https://${portfolio}`) : '' },
-  ].filter((it) => it.link || (it.type === 'location' && location));
+    { type: 'email', label: email, link: email ? `mailto:${email}` : '' },
+    { type: 'phone', label: phone, link: phone ? `tel:${phone.replace(/\s+/g, '')}` : '' },
+    { type: 'location', label: location, link: '' },
+    { type: 'linkedin', label: linkedin, link: linkedin ? (linkedin.startsWith('http') ? linkedin : `https://${linkedin}`) : '' },
+    { type: 'github', label: github, link: github ? (github.startsWith('http') ? github : `https://${github}`) : '' },
+    { type: 'portfolio', label: portfolio, link: portfolio ? (portfolio.startsWith('http') ? portfolio : `https://${portfolio}`) : '' },
+  ].filter((item) => item.label);
 
   if (!items.length) {
     canvas.moveDown(8);
     return;
   }
 
-  // Each icon takes ~20pt of horizontal space (9pt icon + 11pt gap)
-  const slotWidth = 20;
   const right = canvas.pageWidth - canvas.margins.right;
   let x = canvas.margins.left;
-  const pageRef = canvas.page.node;
 
   items.forEach((item) => {
-    if (x + slotWidth > right) {
+    const label = fitText(item.label, canvas.currentFont(false), 8.8, 145);
+    const slotWidth = Math.min(
+      canvas.textWidth(label, 8.8, false) + 20,
+      canvas.contentWidth
+    );
+    if (x !== canvas.margins.left && x + slotWidth > right) {
       x = canvas.margins.left;
       canvas.moveDown(16);
     }
+    if (canvas.y + 14 > canvas.pageBottom()) {
+      canvas.addPage();
+      x = canvas.margins.left;
+    }
     const iconY = canvas.y;
     drawContactIcon(canvas, item.type, x, iconY);
+    canvas.page.drawText(label, {
+      x: x + 12,
+      y: canvas.toPdfY_text(iconY, 8.8),
+      size: 8.8,
+      font: canvas.currentFont(false),
+      color: hexToColor(canvas.theme.body),
+    });
 
     // Add a clickable link annotation over the icon area.
     // pdf-lib doesn't have a high-level API for this, so we use the low-level
@@ -788,7 +920,7 @@ function addContactIconsRow(canvas, resumeData) {
           A: { Type: 'Action', S: 'URI', URI: item.link },
         });
         const ref = canvas.doc.context.register(linkDict);
-        pageRef.addAnnot(ref);
+        canvas.page.node.addAnnot(ref);
       } catch (err) {
         // Link annotation is best-effort; if it fails, the icon is still visible.
         console.warn('[localResumePdf] Failed to add link annotation:', err?.message);
@@ -838,18 +970,29 @@ export async function buildResumePdfBytes(resumeData = {}) {
 
   // --- header ---
   if (theme.headerStyle === 'academic-photo') {
-    // DAAD-style header: portrait photo top-right, name+target on left
-    const photoW = 90;
-    const photoH = 113; // 4:5 portrait
+    // DAAD-style header with two horizontal rules:
+    //   [Name]                        [Photo]
+    //   ════════════════════════════════════════  (rule 1)
+    //   [Target Role]                  [Photo]
+    //   [Contact Icons]                [Photo]
+    //   Nationality: X                 [Photo]
+    //   Date of birth: Y               [Photo]
+    //   Place of birth: Z              [Photo]
+    //   ════════════════════════════════════════  (rule 2)
+    //   [Personal Statement heading + content]
+
+    const photoW = 110;
+    const photoH = 138; // 4:5 portrait, larger
     const photoX = canvas.pageWidth - canvas.margins.right - photoW;
     const photoY = canvas.y;
-    const leftTextWidth = photoX - canvas.margins.left - 14;
+    const leftX = canvas.margins.left;
+    const leftTextWidth = photoX - leftX - 14;
 
+    // --- Photo (top-right) ---
     const photoBase64 = safeText(resumeData.photoBase64);
     let photoEmbedded = false;
     if (photoBase64) {
       try {
-        // Decode base64 to Uint8Array and embed with pdf-lib
         const binary = atob(photoBase64);
         const bytes = new Uint8Array(binary.length);
         for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -862,44 +1005,66 @@ export async function buildResumePdfBytes(resumeData = {}) {
       }
     }
     if (!photoEmbedded) {
-      // Initials avatar fallback
       const initials = `${safeText(resumeData.firstName, 'A').charAt(0)}${safeText(resumeData.lastName, 'U').charAt(0)}`.toUpperCase();
       canvas.drawRect(photoX, photoY, photoW, photoH, canvas.theme.chip);
       canvas.drawRect(photoX, photoY, photoW, photoH, canvas.theme.rule, { borderWidth: 0.75 });
       canvas.drawText(initials, {
-        size: 34, bold: true, color: canvas.theme.blue,
-        x: photoX, y: photoY + photoH / 2 - 17,
+        size: 38, bold: true, color: canvas.theme.blue,
+        x: photoX, y: photoY + photoH / 2 - 19,
         maxWidth: photoW, align: 'center',
       });
     }
 
-    // Name + target role on the left of the photo
-    const nameY = photoY + 8;
+    // --- Name (top-left, beside photo) ---
+    const nameY = photoY + 4;
     canvas.drawText(fullName, {
       size: 22, bold: true, color: theme.ink,
-      x: canvas.margins.left, y: nameY,
+      x: leftX, y: nameY,
       maxWidth: leftTextWidth, align: 'left',
     });
+
+    // --- Target role (ABOVE rule 1, below name) ---
+    canvas.y = nameY + 28;
     if (targetRole) {
       canvas.drawText(targetRole, {
         size: 11, bold: false, color: theme.blue,
-        x: canvas.margins.left, y: nameY + 30,
+        x: leftX, y: canvas.y,
         maxWidth: leftTextWidth, align: 'left',
       });
+      canvas.moveDown(16);
     }
 
-    // Move cursor below the photo
-    canvas.y = photoY + photoH + 8;
+    // --- Rule 1: LEFT COLUMN ONLY (stops before photo, no overlap) ---
+    let ruleY = canvas.y;
+    canvas.drawLine(leftX, ruleY, photoX - 8, ruleY, theme.rule, 0.75);
 
-    // Thin centered rule under the header
-    const ruleY = canvas.y;
-    canvas.drawLine(
-      canvas.margins.left + 80, ruleY,
-      canvas.pageWidth - canvas.margins.right - 80, ruleY,
-      theme.rule, 0.75
-    );
+    // --- Contact icons ---
+    canvas.y = ruleY + 6;
+    addContactIconsRow(canvas, resumeData);
+
+    // --- Personal details (Nationality, DOB, POB) as separate lines ---
+    const personalLines = [
+      safeText(resumeData.nationality) ? `Nationality: ${safeText(resumeData.nationality)}` : '',
+      safeText(resumeData.dateOfBirth) ? `Date of birth: ${safeText(resumeData.dateOfBirth)}` : '',
+      safeText(resumeData.placeOfBirth) ? `Place of birth: ${safeText(resumeData.placeOfBirth)}` : '',
+    ].filter(Boolean);
+
+    personalLines.forEach((line) => {
+      canvas.drawText(line, {
+        size: 9, color: canvas.theme.muted,
+        x: leftX, y: canvas.y,
+        maxWidth: leftTextWidth, align: 'left',
+      });
+      canvas.moveDown(13);
+    });
+
+    // --- Move cursor below the photo (whichever is lower) ---
+    canvas.y = Math.max(canvas.y, photoY + photoH + 8);
+
+    // --- Rule 2: full width, separates header from body ---
+    ruleY = canvas.y;
+    canvas.drawLine(leftX, ruleY, canvas.pageWidth - canvas.margins.right, ruleY, theme.rule, 0.75);
     canvas.moveDown(14);
-    addAcademicPersonalDetails(canvas, resumeData);
   } else if (theme.headerStyle === 'academic') {
     // Europass-inspired centered header
     canvas.drawText(fullName, {
@@ -938,12 +1103,12 @@ export async function buildResumePdfBytes(resumeData = {}) {
     // Nationality | DOB | POB
     addAcademicPersonalDetails(canvas, resumeData);
   } else if (theme.headerStyle === 'european') {
-    const headerY = canvas.y - 6;
+    const headerY = canvas.y;
     canvas.drawRect(
       canvas.margins.left,
-      headerY - 48,
+      headerY,
       canvas.contentWidth,
-      54,
+      64,
       theme.blue
     );
     canvas.drawText(fullName, {
@@ -951,7 +1116,7 @@ export async function buildResumePdfBytes(resumeData = {}) {
       bold: true,
       color: '#FFFFFF',
       x: canvas.margins.left + 14,
-      y: headerY - 24,
+      y: headerY + 12,
       maxWidth: canvas.contentWidth - 28,
     });
     if (targetRole) {
@@ -960,11 +1125,11 @@ export async function buildResumePdfBytes(resumeData = {}) {
         bold: true,
         color: '#DDEEF8',
         x: canvas.margins.left + 14,
-        y: headerY - 40,
+        y: headerY + 40,
         maxWidth: canvas.contentWidth - 28,
       });
     }
-    canvas.moveDown(70);
+    canvas.y = headerY + 76;
   } else {
     const centered = theme.headerStyle === 'center';
     canvas.drawText(fullName, {
@@ -1066,7 +1231,7 @@ export async function buildResumePdfBytes(resumeData = {}) {
           addParagraph(canvas, project?.description, { size: 9.3 });
         }
         if (index < projects.length - 1) {
-          const lineY = canvas.y - 2;
+          const lineY = canvas.y + 2;
           canvas.drawLine(
             canvas.margins.left,
             lineY,
@@ -1189,7 +1354,7 @@ export async function buildResumePdfBytes(resumeData = {}) {
         addParagraph(canvas, project?.description, { size: 9.3 });
       }
       if (index < projects.length - 1) {
-        const lineY = canvas.y - 2;
+        const lineY = canvas.y + 2;
         canvas.drawLine(
           canvas.margins.left,
           lineY,
