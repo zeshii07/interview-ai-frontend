@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Stack, router } from 'expo-router';
+import { Stack as NativeStack, router } from 'expo-router';
+// Pure-JS fallback stack — doesn't require expo-glass-effect or react-native-screens
+// native module. Used only if the native Stack fails to load.
+import { Stack as JSStack } from 'expo-router/js-stack';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
@@ -18,6 +21,41 @@ import { checkOnboardingSeen, loadLastWorkingRoute } from '../utils/storage';
 
 import LoginScreen from './(auth)/login';
 import OnboardingScreen from './(auth)/onboarding';
+
+/**
+ * Defensive Stack resolver.
+ *
+ * In SDK 57, `import { Stack } from 'expo-router'` goes through:
+ *
+ *   expo-router/build/index.js
+ *     └─> ./exports (deprecated getter)
+ *           └─> ./stack
+ *                 └─> build/layouts/Stack.js
+ *                       └─> StackClient.js
+ *                             └─> createNativeStackNavigator()  ← runs at module-eval
+ *                                   └─> require("expo-glass-effect")
+ *                                         + isLiquidGlassAvailable()  ← runs at eval
+ *
+ * If `expo-glass-effect` is missing or its module-eval throws, the entire
+ * chain fails and `Stack` ends up `undefined`. That's what produces:
+ *
+ *   ERROR [TypeError: undefined is not a function]
+ *   Code: _layout.js
+ *   > 2 | import { Stack, router } from 'expo-router';
+ *
+ * The fix has two parts:
+ *   1. Add `expo-glass-effect` (and other missing peer deps) to package.json.
+ *      See FIXES.md for the full list.
+ *   2. Use a defensive resolver here so the app still boots with the pure-JS
+ *      Stack (`expo-router/js-stack`) if the native Stack is unavailable.
+ *      The JS Stack doesn't need `expo-glass-effect` or the
+ *      `react-native-screens` native module — it renders plain Views.
+ *
+ * Once `npx expo install --fix` + `npx expo start -c` is run with the patched
+ * package.json, `NativeStack` will be a proper function and the fallback
+ * will never trigger.
+ */
+const Stack = typeof NativeStack === 'function' ? NativeStack : JSStack;
 
 Appearance.setColorScheme('light');
 
@@ -58,7 +96,6 @@ export default function RootLayout() {
         console.error('Failed to load onboarding state:', error);
 
         if (mounted) {
-          // Do not crash the whole application because storage failed.
           setShowOnboarding(false);
           setStartupError('Some saved settings could not be loaded.');
         }
