@@ -2,10 +2,11 @@ import { auth } from '../constants/firebase';
 import { deleteCloudHistory } from './historyService';
 import useResumeBuilderStore from '../store/resumeBuilderStore';
 import useInterviewStore from '../store/interviewStore';
+import useSavedJobsStore from '../store/savedJobsStore';
 import { clearPrivateWorkingState } from '../utils/storage';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
   signOut,
   updateProfile,
   sendPasswordResetEmail,
@@ -15,7 +16,7 @@ import {
   deleteUser,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  onAuthStateChanged // <-- ADDED THIS
+  onAuthStateChanged,
 } from 'firebase/auth';
 
 const profileListeners = new Set();
@@ -54,6 +55,8 @@ export const registerUser = async (email, password, displayName) => {
 export const loginUser = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
+    // Tell the saved-jobs store about the new user so it can hydrate from cloud
+    useSavedJobsStore.getState().setUserId(userCredential.user.uid);
     return { success: true, user: userCredential.user };
   } catch (error) {
     return { success: false, error: 'Invalid email or password.' };
@@ -78,6 +81,7 @@ export const signInWithGoogle = async (idToken, accessToken) => {
     if (!idToken && !accessToken) return { success: false, error: 'Google did not return a valid sign-in token.' };
     const credential = GoogleAuthProvider.credential(idToken || null, accessToken || null);
     const userCredential = await signInWithCredential(auth, credential);
+    useSavedJobsStore.getState().setUserId(userCredential.user.uid);
     return { success: true, user: userCredential.user };
   } catch (error) {
     return { success: false, error: error?.message || 'Google sign-in failed.' };
@@ -97,16 +101,22 @@ export const logoutUser = async () => {
 
 // Auth Listener
 export const onAuthChange = (callback) => {
-  return onAuthStateChanged(auth, callback);
+  return onAuthStateChanged(auth, (currentUser) => {
+    // Keep saved-jobs store in sync with auth state
+    useSavedJobsStore.getState().setUserId(currentUser?.uid || null);
+    callback(currentUser);
+  });
 };
 
 export const clearSignedOutLocalState = async () => {
   await Promise.all([
     waitForHydration(useResumeBuilderStore),
     waitForHydration(useInterviewStore),
+    waitForHydration(useSavedJobsStore),
   ]);
   useResumeBuilderStore.getState().resetBuilder();
   useInterviewStore.getState().clearUserState();
+  useSavedJobsStore.getState().clearUserState();
   await clearPrivateWorkingState();
 };
 

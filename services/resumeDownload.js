@@ -37,6 +37,35 @@ async function getFs() {
   return _fsModule || null;
 }
 
+function bytesToBase64(bytes) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+  let binary = '';
+  const chunkSize = 8192;
+  const len = data.length;
+  for (let i = 0; i < len; i += chunkSize) {
+    const chunk = data.subarray(i, Math.min(i + chunkSize, len));
+    binary += String.fromCharCode.apply(null, chunk);
+  }
+  if (typeof btoa === 'function') {
+    return btoa(binary);
+  }
+  if (typeof Buffer !== 'undefined') {
+    return Buffer.from(binary, 'binary').toString('base64');
+  }
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let result = '';
+  for (let i = 0; i < len; i += 3) {
+    const b0 = data[i];
+    const b1 = i + 1 < len ? data[i + 1] : 0;
+    const b2 = i + 2 < len ? data[i + 2] : 0;
+    result += chars[b0 >> 2];
+    result += chars[((b0 & 3) << 4) | (b1 >> 4)];
+    result += i + 1 < len ? chars[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    result += i + 2 < len ? chars[b2 & 63] : '=';
+  }
+  return result;
+}
+
 /**
  * Write bytes to a file in the cache directory. Returns the file URI.
  * Falls back to legacy API if the new File/Directory API isn't available.

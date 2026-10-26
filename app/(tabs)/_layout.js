@@ -1,8 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-// Use the direct (non-deprecated) path. In SDK 57, `import { Tabs } from 'expo-router'`
-// goes through a deprecated getter; `expo-router/js-tabs` loads the same component
-// directly from build/layouts/Tabs.js.
+// SDK-57 recommended direct path — avoids the deprecated getter chain.
 import { Tabs as NativeTabs } from 'expo-router/js-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -10,38 +8,32 @@ import { Colors, Spacing } from '../../constants/theme';
 import useInterviewStore from '../../store/interviewStore';
 import { getCurrentUser } from '../../services/authService';
 
-/**
- * Defensive Tabs resolver.
- *
- * Same pattern as the root _layout.js: if the native Tabs fails to load
- * (e.g., because react-native-screens or react-native-reanimated is still
- * mismatched), fall back to a hand-rolled bottom bar so the app still boots
- * with a visible error state instead of crashing.
- *
- * After running the patched package.json + `npx expo install --fix` +
- * `npx expo start -c`, NativeTabs will be a proper function and the
- * fallback will never trigger.
- */
+// Defensive resolver — falls back to a hand-rolled tab bar if the native
+// Tabs fails to load (e.g. react-native-screens native module missing).
 const Tabs = typeof NativeTabs === 'function' ? NativeTabs : null;
 
 export default function TabLayout() {
-  const initializeApp = useInterviewStore(
-    (state) => state.initializeApp
-  );
+  const initializeApp = useInterviewStore((state) => state.initializeApp);
+  const isMounted = useRef(true);
 
   useEffect(() => {
+    isMounted.current = true;
+
     const initialize = async () => {
       try {
         await Promise.resolve(initializeApp(getCurrentUser()?.uid));
       } catch (error) {
-        console.error(
-          'Interview store initialization failed:',
-          error
-        );
+        // Don't let a failed store init kill the entire tab navigator —
+        // the user can still navigate to other tabs.
+        console.error('Interview store initialization failed:', error);
       }
     };
 
     initialize();
+
+    return () => {
+      isMounted.current = false;
+    };
   }, [initializeApp]);
 
   if (!Tabs) {
@@ -59,25 +51,15 @@ export default function TabLayout() {
           paddingBottom: Spacing.sm,
           height: Platform.OS === 'ios' ? 84 : 64,
         },
-
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
-
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: '600',
         },
-
-        headerStyle: {
-          backgroundColor: Colors.bgPrimary,
-        },
-
+        headerStyle: { backgroundColor: Colors.bgPrimary },
         headerTintColor: Colors.textPrimary,
-
-        headerTitleStyle: {
-          fontWeight: '700',
-        },
-
+        headerTitleStyle: { fontWeight: '700' },
         headerShadowVisible: false,
       }}
     >
@@ -88,11 +70,7 @@ export default function TabLayout() {
           headerShown: false,
           tabBarStyle: { display: 'none' },
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'home' : 'home-outline'}
-              size={size}
-              color={color}
-            />
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
           ),
         }}
       />
@@ -103,11 +81,7 @@ export default function TabLayout() {
           title: 'Practice',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={
-                focused
-                  ? 'chatbubble'
-                  : 'chatbubble-outline'
-              }
+              name={focused ? 'chatbubble' : 'chatbubble-outline'}
               size={size}
               color={color}
             />
@@ -120,8 +94,18 @@ export default function TabLayout() {
         options={{
           title: 'Questions',
           tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'list' : 'list-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="jobs"
+        options={{
+          title: 'Jobs',
+          tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
-              name={focused ? 'list' : 'list-outline'}
+              name={focused ? 'briefcase' : 'briefcase-outline'}
               size={size}
               color={color}
             />
@@ -134,11 +118,7 @@ export default function TabLayout() {
         options={{
           title: 'History',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'time' : 'time-outline'}
-              size={size}
-              color={color}
-            />
+            <Ionicons name={focused ? 'time' : 'time-outline'} size={size} color={color} />
           ),
         }}
       />
@@ -148,10 +128,11 @@ export default function TabLayout() {
 
 function FallbackTabLayout() {
   const fallbackScreens = [
-    { name: 'index',    title: 'Home',     icon: 'home-outline' },
+    { name: 'index', title: 'Home', icon: 'home-outline' },
     { name: 'practice', title: 'Practice', icon: 'chatbubble-outline' },
-    { name: 'questions',title: 'Questions',icon: 'list-outline' },
-    { name: 'history',  title: 'History',   icon: 'time-outline' },
+    { name: 'questions', title: 'Questions', icon: 'list-outline' },
+    { name: 'jobs', title: 'Jobs', icon: 'briefcase-outline' },
+    { name: 'history', title: 'History', icon: 'time-outline' },
   ];
 
   return (
@@ -167,11 +148,7 @@ function FallbackTabLayout() {
       </View>
       <View style={fallbackStyles.tabBar}>
         {fallbackScreens.map((s) => (
-          <TouchableOpacity
-            key={s.name}
-            style={fallbackStyles.tab}
-            disabled
-          >
+          <TouchableOpacity key={s.name} style={fallbackStyles.tab} disabled>
             <Ionicons name={s.icon} size={22} color={Colors.textMuted} />
             <Text style={fallbackStyles.tabLabel}>{s.title}</Text>
           </TouchableOpacity>

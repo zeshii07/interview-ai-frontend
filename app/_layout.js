@@ -1,7 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { Stack as NativeStack, router } from 'expo-router';
-// Pure-JS fallback stack — doesn't require expo-glass-effect or react-native-screens
-// native module. Used only if the native Stack fails to load.
+// SDK-57 recommended direct path. `import { Stack } from 'expo-router'` goes
+// through a deprecated getter that fails at module-eval if any peer dep
+// (expo-glass-effect, react-native-screens, react-native-reanimated) is
+// mismatched. `expo-router/stack` resolves to the same component but without
+// the deprecated getter layer, so the failure mode is far less common.
+// We still keep the JS fallback for absolute safety.
+import { Stack as NativeStack, router } from 'expo-router/stack';
 import { Stack as JSStack } from 'expo-router/js-stack';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -22,39 +26,9 @@ import { checkOnboardingSeen, loadLastWorkingRoute } from '../utils/storage';
 import LoginScreen from './(auth)/login';
 import OnboardingScreen from './(auth)/onboarding';
 
-/**
- * Defensive Stack resolver.
- *
- * In SDK 57, `import { Stack } from 'expo-router'` goes through:
- *
- *   expo-router/build/index.js
- *     └─> ./exports (deprecated getter)
- *           └─> ./stack
- *                 └─> build/layouts/Stack.js
- *                       └─> StackClient.js
- *                             └─> createNativeStackNavigator()  ← runs at module-eval
- *                                   └─> require("expo-glass-effect")
- *                                         + isLiquidGlassAvailable()  ← runs at eval
- *
- * If `expo-glass-effect` is missing or its module-eval throws, the entire
- * chain fails and `Stack` ends up `undefined`. That's what produces:
- *
- *   ERROR [TypeError: undefined is not a function]
- *   Code: _layout.js
- *   > 2 | import { Stack, router } from 'expo-router';
- *
- * The fix has two parts:
- *   1. Add `expo-glass-effect` (and other missing peer deps) to package.json.
- *      See FIXES.md for the full list.
- *   2. Use a defensive resolver here so the app still boots with the pure-JS
- *      Stack (`expo-router/js-stack`) if the native Stack is unavailable.
- *      The JS Stack doesn't need `expo-glass-effect` or the
- *      `react-native-screens` native module — it renders plain Views.
- *
- * Once `npx expo install --fix` + `npx expo start -c` is run with the patched
- * package.json, `NativeStack` will be a proper function and the fallback
- * will never trigger.
- */
+// Defensive resolver: prefer native Stack, fall back to pure-JS Stack if the
+// native one is undefined (which can still happen if expo-glass-effect's
+// native module fails to link on a stray Android build).
 const Stack = typeof NativeStack === 'function' ? NativeStack : JSStack;
 
 Appearance.setColorScheme('light');
@@ -76,9 +50,11 @@ export default function RootLayout() {
   const [routeRestoreHandled, setRouteRestoreHandled] = useState(false);
   const initialAuthHandled = useRef(false);
   const restoreEligible = useRef(false);
+  const isMounted = useRef(true);
 
+  // Storage / onboarding bootstrap
   useEffect(() => {
-    let mounted = true;
+    isMounted.current = true;
 
     const loadStoredState = async () => {
       try {
@@ -88,19 +64,19 @@ export default function RootLayout() {
         ]);
         Appearance.setColorScheme('light');
 
-        if (mounted) {
+        if (isMounted.current) {
           setShowOnboarding(!seen);
           setLastWorkingRoute(savedRoute);
         }
       } catch (error) {
         console.error('Failed to load onboarding state:', error);
 
-        if (mounted) {
+        if (isMounted.current) {
           setShowOnboarding(false);
           setStartupError('Some saved settings could not be loaded.');
         }
       } finally {
-        if (mounted) {
+        if (isMounted.current) {
           setStorageReady(true);
         }
       }
@@ -109,30 +85,37 @@ export default function RootLayout() {
     loadStoredState();
 
     return () => {
-      mounted = false;
+      isMounted.current = false;
     };
   }, []);
 
+  // Auth bootstrap — unsubscribe on unmount (memory leak fix)
   useEffect(() => {
     let unsubscribe;
 
     try {
       unsubscribe = onAuthChange(async (currentUser) => {
+        if (!isMounted.current) return;
+
         if (!initialAuthHandled.current) {
           initialAuthHandled.current = true;
           restoreEligible.current = Boolean(currentUser);
         }
         if (!currentUser) {
           await clearSignedOutLocalState();
-          setLastWorkingRoute(null);
+          if (isMounted.current) setLastWorkingRoute(null);
         }
-        setUser(currentUser);
-        setAuthReady(true);
+        if (isMounted.current) {
+          setUser(currentUser);
+          setAuthReady(true);
+        }
       });
     } catch (error) {
       console.error('Firebase authentication initialization failed:', error);
-      setStartupError('Authentication could not be initialized.');
-      setAuthReady(true);
+      if (isMounted.current) {
+        setStartupError('Authentication could not be initialized.');
+        setAuthReady(true);
+      }
     }
 
     return () => {
@@ -167,14 +150,8 @@ export default function RootLayout() {
   if (!appIsReady) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator
-          size="large"
-          color={Colors.primary}
-        />
-
-        <Text style={styles.loadingText}>
-          Starting Hirely…
-        </Text>
+        <ActivityIndicator size="large" color={Colors.primary} />
+        <Text style={styles.loadingText}>Starting Hirely…</Text>
       </View>
     );
   }
@@ -182,10 +159,7 @@ export default function RootLayout() {
   if (showOnboarding) {
     return (
       <>
-        <StatusBar
-          style="dark"
-          backgroundColor={Colors.bgPrimary}
-        />
+        <StatusBar style="dark" backgroundColor={Colors.bgPrimary} />
         <OnboardingScreen onComplete={() => setShowOnboarding(false)} />
       </>
     );
@@ -194,17 +168,10 @@ export default function RootLayout() {
   if (!user) {
     return (
       <>
-        <StatusBar
-          style="dark"
-          backgroundColor={Colors.bgPrimary}
-        />
-
+        <StatusBar style="dark" backgroundColor={Colors.bgPrimary} />
         {startupError ? (
-          <Text style={styles.errorText}>
-            {startupError}
-          </Text>
+          <Text style={styles.errorText}>{startupError}</Text>
         ) : null}
-
         <LoginScreen />
       </>
     );
@@ -212,30 +179,18 @@ export default function RootLayout() {
 
   return (
     <>
-      <StatusBar
-        style="dark"
-        backgroundColor={Colors.bgPrimary}
-      />
+      <StatusBar style="dark" backgroundColor={Colors.bgPrimary} />
 
       <Stack
         key="light"
         screenOptions={{
-          headerStyle: {
-            backgroundColor: Colors.bgPrimary,
-          },
+          headerStyle: { backgroundColor: Colors.bgPrimary },
           headerTintColor: Colors.textPrimary,
           headerShadowVisible: false,
-          contentStyle: {
-            backgroundColor: Colors.bgPrimary,
-          },
+          contentStyle: { backgroundColor: Colors.bgPrimary },
         }}
       >
-        <Stack.Screen
-          name="(tabs)"
-          options={{
-            headerShown: false,
-          }}
-        />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
 
         <Stack.Screen
           name="interview/session"
@@ -247,15 +202,18 @@ export default function RootLayout() {
           }}
         />
 
-        <Stack.Screen
-          name="resume/analyze"
-          options={{
-            title: 'Resume AI',
-          }}
-        />
+        <Stack.Screen name="resume/analyze" options={{ title: 'Resume AI' }} />
         <Stack.Screen name="settings/index" options={{ title: 'Settings' }} />
         <Stack.Screen name="settings/about" options={{ title: 'About Hirely' }} />
-        <Stack.Screen name="settings/delete-account" options={{ title: 'Account & Data' }} />
+        <Stack.Screen
+          name="settings/delete-account"
+          options={{ title: 'Account & Data' }}
+        />
+
+        {/* NEW: Job search routes */}
+        <Stack.Screen name="jobs/index" options={{ title: 'Find Jobs' }} />
+        <Stack.Screen name="jobs/detail" options={{ title: 'Job Details' }} />
+        <Stack.Screen name="jobs/saved" options={{ title: 'Saved Jobs' }} />
       </Stack>
     </>
   );
@@ -268,13 +226,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: Colors.bgPrimary,
   },
-
   loadingText: {
     marginTop: 12,
     color: Colors.textSecondary,
     fontSize: 14,
   },
-
   errorText: {
     color: Colors.error,
     backgroundColor: Colors.bgPrimary,
