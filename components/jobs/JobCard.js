@@ -2,26 +2,20 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import useSavedJobsStore from '../../store/savedJobsStore';
 
-/**
- * Provider badge colors so the source is scannable at a glance.
- */
 const PROVIDER_COLORS = {
-  adzuna: { bg: 'rgba(36, 95, 199, 0.10)', text: '#245FC7' },
-  jooble: { bg: 'rgba(0, 122, 87, 0.10)', text: '#007A57' },
-  reed: { bg: 'rgba(168, 92, 8, 0.10)', text: '#A85C08' },
-  usajobs: { bg: 'rgba(53, 53, 138, 0.10)', text: '#35358A' },
-  unknown: { bg: Colors.bgElevated, text: Colors.textMuted },
+  adzuna: Colors.providerAdzuna,
+  jooble: Colors.providerJooble,
+  reed: Colors.providerReed,
+  usajobs: Colors.providerUsajobs,
+  unknown: Colors.providerUnknown,
 };
 
 function formatSalary(salary) {
   if (!salary || (!salary.min && !salary.max)) return null;
-  const fmt = (n) => {
-    if (n >= 1000) return `$${Math.round(n / 1000)}k`;
-    return `$${n}`;
-  };
+  const fmt = (n) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
   if (salary.min && salary.max) return `${fmt(salary.min)} – ${fmt(salary.max)}`;
   if (salary.min) return `${fmt(salary.min)}+`;
   if (salary.max) return `up to ${fmt(salary.max)}`;
@@ -42,10 +36,6 @@ function formatPostedAt(iso) {
   return monthsAgo === 1 ? '1mo ago' : `${monthsAgo}mo ago`;
 }
 
-/**
- * @param {object} job  — normalized job object from the backend
- * @param {function} onPress  — tap the card
- */
 export default function JobCard({ job, onPress }) {
   const isSaved = useSavedJobsStore((s) => s.isSaved(job?.id));
   const toggleSaved = useSavedJobsStore((s) => s.toggleSaved);
@@ -106,7 +96,7 @@ export default function JobCard({ job, onPress }) {
 
         {job.isRemote ? (
           <View style={styles.remoteBadge}>
-            <Ionicons name="wifi-outline" size={11} color={Colors.success} />
+            <Ionicons name="wifi-outline" size={10} color={Colors.success} />
             <Text style={styles.remoteText}>Remote</Text>
           </View>
         ) : null}
@@ -135,7 +125,7 @@ export default function JobCard({ job, onPress }) {
         </View>
       )}
 
-      {/* Match score badge — only if > 70 (otherwise not interesting enough to surface) */}
+      {/* Match score badge — only if >= 70 */}
       {typeof job.matchScore === 'number' && job.matchScore >= 70 ? (
         <View style={styles.matchBar}>
           <View style={[styles.matchFill, { width: `${Math.min(100, job.matchScore)}%` }]} />
@@ -151,9 +141,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    marginBottom: Spacing.sm,
     borderWidth: 1,
     borderColor: Colors.border,
+    ...Shadows.small,
   },
   headerRow: {
     flexDirection: 'row',
@@ -200,7 +190,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(8, 122, 85, 0.10)',
+    backgroundColor: Colors.successBg,
     paddingHorizontal: Spacing.xs + 2,
     paddingVertical: 2,
     borderRadius: Radius.sm,
@@ -221,7 +211,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    backgroundColor: 'rgba(8, 122, 85, 0.08)',
+    backgroundColor: Colors.successBg,
     paddingHorizontal: Spacing.xs + 2,
     paddingVertical: 3,
     borderRadius: Radius.sm,

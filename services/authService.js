@@ -34,7 +34,6 @@ const waitForHydration = (store) => {
   });
 };
 
-// Register with Name
 export const registerUser = async (email, password, displayName) => {
   try {
     const userCredential = await createUserWithEmailAndPassword(auth, email, password);
@@ -42,6 +41,7 @@ export const registerUser = async (email, password, displayName) => {
     await updateProfile(userCredential.user, { displayName: cleanDisplayName });
     await reload(userCredential.user);
     profileListeners.forEach((listener) => listener(userCredential.user));
+    useSavedJobsStore.getState().setUserId(userCredential.user.uid);
     return { success: true, user: userCredential.user };
   } catch (error) {
     let message = 'Registration failed.';
@@ -51,11 +51,9 @@ export const registerUser = async (email, password, displayName) => {
   }
 };
 
-// Login
 export const loginUser = async (email, password) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    // Tell the saved-jobs store about the new user so it can hydrate from cloud
     useSavedJobsStore.getState().setUserId(userCredential.user.uid);
     return { success: true, user: userCredential.user };
   } catch (error) {
@@ -63,7 +61,6 @@ export const loginUser = async (email, password) => {
   }
 };
 
-// Forgot Password
 export const resetPassword = async (email) => {
   try {
     await sendPasswordResetEmail(auth, email);
@@ -75,7 +72,6 @@ export const resetPassword = async (email) => {
   }
 };
 
-// Google Login
 export const signInWithGoogle = async (idToken, accessToken) => {
   try {
     if (!idToken && !accessToken) return { success: false, error: 'Google did not return a valid sign-in token.' };
@@ -88,7 +84,6 @@ export const signInWithGoogle = async (idToken, accessToken) => {
   }
 };
 
-// Logout
 export const logoutUser = async () => {
   try {
     await signOut(auth);
@@ -99,10 +94,8 @@ export const logoutUser = async () => {
   }
 };
 
-// Auth Listener
 export const onAuthChange = (callback) => {
   return onAuthStateChanged(auth, (currentUser) => {
-    // Keep saved-jobs store in sync with auth state
     useSavedJobsStore.getState().setUserId(currentUser?.uid || null);
     callback(currentUser);
   });

@@ -6,18 +6,6 @@
  * Uses pdf-lib (pure JS, no native deps, works in Expo / React Native)
  * and the StandardFonts (Helvetica family) so there are no extra font
  * assets to bundle.
- *
- * ⚠️ IMPORTANT — WinAnsi encoding constraint:
- * pdf-lib's StandardFonts (Helvetica, Times-Roman, Courier) only support
- * the WinAnsi (CP-1252) character set. Any character outside this range
- * (emojis, CJK, Arabic, Cyrillic, smart quotes, em-dashes, etc.) causes
- * pdf-lib to throw: "WinAnsi cannot encode X (0xXXXX)".
- *
- * The `sanitizeForWinAnsi()` function below replaces common Unicode chars
- * with their WinAnsi equivalents and strips anything that can't be encoded.
- * It is called inside `safeText()` so ALL text flowing through the PDF
- * is sanitized at the source, plus a second safety net in
- * `ResumeCanvas.drawText()`.
  */
 
 import {
@@ -27,160 +15,6 @@ import {
 } from 'pdf-lib';
 
 // ---------- helpers ----------
-
-/**
- * Replace common Unicode characters with WinAnsi (CP-1252) equivalents
- * and strip anything that pdf-lib's StandardFonts cannot encode.
- *
- * This fixes the "WinAnsi cannot encode" error that occurs when resume
- * content contains smart quotes, em-dashes, emojis, arrows, bullets,
- * or any non-Latin text (Urdu, Hindi, Arabic, CJK, Cyrillic, etc.).
- *
- * The WinAnsi character set covers:
- *   - 0x00-0x7F  (ASCII)
- *   - 0xA0-0xFF  (Latin-1 supplement: àáâãäåæçèéêëìíîïðñòóôõöøùúûüýþÿ, etc.)
- *   - 0x80-0x9F  (selected chars: €‚ƒ„…†‡ˆ‰Š‹ŒŽ''""•–—˜™š›œžŸ)
- *
- * Everything else is either replaced with a close ASCII equivalent or
- * stripped. Emojis are always stripped (they have no WinAnsi mapping).
- */
-function sanitizeForWinAnsi(input) {
-  if (input == null) return '';
-  let s = typeof input === 'string' ? input : String(input);
-
-  // 1. Replace common Unicode punctuation/symbols with ASCII equivalents.
-  s = s
-    // Dashes
-    .replace(/[\u2010\u2011]/g, '-')   // hyphen, non-breaking hyphen
-    .replace(/\u2012/g, '=')           // figure dash
-    .replace(/\u2013/g, '-')           // en dash
-    .replace(/\u2014/g, '--')          // em dash → double hyphen
-    .replace(/\u2015/g, '--')          // horizontal bar
-    // Quotes
-    .replace(/[\u2018\u2019\u201A\u201B]/g, "'")  // single curly quotes
-    .replace(/[\u201C\u201D\u201E\u201F]/g, '"')  // double curly quotes
-    .replace(/\u00AB/g, '<<')          // «
-    .replace(/\u00BB/g, '>>')          // »
-    // Spaces
-    .replace(/[\u00A0\u2007\u202F]/g, ' ')   // non-breaking spaces
-    .replace(/[\u2000-\u200A\u205F]/g, ' ')  // various width spaces
-    .replace(/\u200B/g, '')            // zero-width space
-    .replace(/\u2028/g, '\n')          // line separator
-    .replace(/\u2029/g, '\n')          // paragraph separator
-    // Ellipsis & misc punctuation
-    .replace(/\u2026/g, '...')         // …
-    .replace(/\u2044/g, '/')           // ⁄ fraction slash
-    // Bullets & dots (U+2022 • IS in WinAnsi at 0x95, but keep for safety)
-    .replace(/[\u2023\u2043\u204C\u204D\u2219\u25AA\u25CF\u25E6]/g, '*')
-    // Arrows
-    .replace(/\u2192/g, '->')          // →
-    .replace(/\u2190/g, '<-')          // ←
-    .replace(/\u2191/g, '^')           // ↑
-    .replace(/\u2193/g, 'v')           // ↓
-    .replace(/\u21D2/g, '=>')          // ⇒
-    // Math symbols
-    .replace(/\u00D7/g, 'x')           // × multiplication
-    .replace(/\u00F7/g, '/')           // ÷ division
-    .replace(/\u2212/g, '-')           // − minus sign
-    .replace(/\u2217/g, '*')           // ∗ asterisk operator
-    .replace(/\u2260/g, '!=')          // ≠
-    .replace(/\u2264/g, '<=')          // ≤
-    .replace(/\u2265/g, '>=')          // ≥
-    .replace(/\u2248/g, '~=')          // ≈
-    .replace(/\u221E/g, 'inf')         // ∞
-    .replace(/\u2211/g, 'sum')         // ∑
-    .replace(/\u220F/g, 'prod')        // ∏
-    .replace(/\u221A/g, 'sqrt')        // √
-    .replace(/\u222B/g, 'int')         // ∫
-    .replace(/\u03C0/g, 'pi')          // π
-    .replace(/\u0394/g, 'Delta')       // Δ
-    // Check marks & crosses
-    .replace(/[\u2713\u2714]/g, 'OK')  // ✓
-    .replace(/[\u2715\u2716\u2717\u2718]/g, 'x')  // ✗
-    .replace(/[\u2605\u2606]/g, '*')   // ★ ☆
-    // Trademark/copyright (™ is NOT in WinAnsi, ©® are)
-    .replace(/\u2122/g, '(TM)')        // ™
-    .replace(/\u00A9/g, '(c)')         // ©
-    .replace(/\u00AE/g, '(R)')         // ®
-    // Other WinAnsi-mappable chars in the 0x80-0x9F range (their Unicode
-    // code points are > 0xFF, so step 3 below would strip them unless we
-    // replace them here first).
-    .replace(/\u2022/g, '*')           // • bullet (WinAnsi 0x95)
-    .replace(/\u2020/g, '+')           // † dagger (WinAnsi 0x86)
-    .replace(/\u2021/g, '++')          // ‡ double dagger (WinAnsi 0x87)
-    .replace(/\u02C6/g, '^')           // ˆ modifier letter circumflex (WinAnsi 0x88)
-    .replace(/\u2030/g, '0/00')        // ‰ per mille (WinAnsi 0x89)
-    .replace(/\u0160/g, 'S')           // Š (WinAnsi 0x8A)
-    .replace(/\u2039/g, '<')           // ‹ single left angle quote (WinAnsi 0x8B)
-    .replace(/\u0152/g, 'OE')          // Œ (WinAnsi 0x8C)
-    .replace(/\u017D/g, 'Z')           // Ž (WinAnsi 0x8E)
-    .replace(/\u0161/g, 's')           // š (WinAnsi 0x9A)
-    .replace(/\u203A/g, '>')           // › single right angle quote (WinAnsi 0x9B)
-    .replace(/\u0153/g, 'oe')          // œ (WinAnsi 0x9C)
-    .replace(/\u017E/g, 'z')           // ž (WinAnsi 0x9E)
-    .replace(/\u0178/g, 'Y')           // Ÿ (WinAnsi 0x9F)
-    .replace(/\u02DC/g, '~')           // ˜ small tilde (WinAnsi 0x98)
-    .replace(/\u0192/g, 'f')           // ƒ (WinAnsi 0x83)
-    // Currency (€ IS in WinAnsi at 0x80, but safer to replace)
-    .replace(/\u20AC/g, 'EUR')         // €
-    .replace(/\u20A3/g, 'FRF')         // ₣
-    .replace(/\u20A4/g, 'GBP')         // £ (also in WinAnsi, but safe)
-    .replace(/\u00A5/g, 'JPY')         // ¥
-    .replace(/\u20A6/g, 'NGN')         // ₦
-    .replace(/\u20A8/g, 'Rs')          // ₨
-    .replace(/\u20B9/g, 'Rs')          // ₹
-    .replace(/\u20AA/g, 'ILS')         // ₪
-    .replace(/\u20AB/g, 'VND')         // ₫
-    .replace(/\u20B1/g, 'PHP')         // ₱
-    .replace(/\u20B2/g, 'PYG')         // ₲
-    .replace(/\u20B4/g, 'UAH')         // ₴
-    .replace(/\u20B5/g, 'GHS')         // ₵
-    // Fractions
-    .replace(/\u00BC/g, '1/4')
-    .replace(/\u00BD/g, '1/2')
-    .replace(/\u00BE/g, '3/4')
-    // Degree & plus-minus (in WinAnsi, but safe to keep)
-    // .replace(/\u00B0/g, ' deg ')     // ° — keep, it's in WinAnsi
-    // .replace(/\u00B1/g, '+/-')       // ± — keep, it's in WinAnsi
-    // Typography
-    .replace(/\u00A6/g, '|')           // ¦ broken bar
-    .replace(/\u00AD/g, '-')           // ­ soft hyphen
-    .replace(/\u00B7/g, '.')           // · middle dot
-    .replace(/\u2016/g, '||')          // ‖ double vertical line
-    .replace(/\u2032/g, "'")           // ′ prime
-    .replace(/\u2033/g, '"')           // ″ double prime
-    .replace(/\u2039/g, '<')           // ‹
-    .replace(/\u203A/g, '>')           // ›
-    .replace(/\u00BF/g, '?')           // ¿ inverted question mark
-    .replace(/\u00A1/g, '!')           // ¡ inverted exclamation mark
-    // Roman numerals
-    .replace(/[\u2160-\u216F]/g, (m) => {
-      const map = ['I','II','III','IV','V','VI','VII','VIII','IX','X','XI','XII','L','C','D','M'];
-      return map[m.charCodeAt(0) - 0x2160] || '';
-    });
-
-  // 2. Strip ALL emojis and symbols outside the Unicode basic planes.
-  //    This catches: 😀🎉🔥⚡🌱🎯🧠💻 (and thousands more).
-  //    Range: U+1F000 to U+1FAFF (Emoticons, Misc Symbols, Pictographs,
-  //    Transport, Supplemental Symbols, Symbols and Pictographs Extended-A)
-  s = s.replace(/[\u{1F000}-\u{1FAFF}]/gu, '');
-  //    Dingbats, Misc Symbols, Transport (U+2700-U+27BF, U+2600-U+26FF)
-  s = s.replace(/[\u{2600}-\u{27BF}]/gu, '');
-  //    Variation selectors (invisible emoji modifiers)
-  s = s.replace(/[\u{FE00}-\u{FE0F}]/gu, '');
-  //    Zero-width joiner and non-joiner
-  s = s.replace(/[\u{200D}\u{200C}]/gu, '');
-
-  // 3. Strip any remaining characters that are NOT in the WinAnsi range.
-  //    WinAnsi covers: 0x00-0x7F (ASCII) + 0xA0-0xFF (Latin-1) + selected
-  //    chars in 0x80-0x9F. We allow 0x00-0xFF and strip everything else.
-  //    This catches: CJK (Chinese/Japanese/Korean), Arabic, Hebrew,
-  //    Cyrillic, Thai, Devanagari (Hindi/Urdu when in Devanagari script),
-  //    and any other non-Latin script.
-  s = s.replace(/[^\x00-\xFF]/g, '');
-
-  return s;
-}
 
 function hexToColor(hex) {
   if (typeof hex !== 'string' || !hex) return rgb(0, 0, 0);
@@ -202,9 +36,9 @@ function hexToColor(hex) {
 }
 
 function safeText(value, fallback = '') {
-  if (typeof value === 'string') return sanitizeForWinAnsi(value.trim() || fallback);
-  if (typeof value === 'number') return sanitizeForWinAnsi(String(value));
-  return sanitizeForWinAnsi(fallback);
+  if (typeof value === 'string') return value.trim() || fallback;
+  if (typeof value === 'number') return String(value);
+  return fallback;
 }
 
 function safeArray(value) {
@@ -267,26 +101,15 @@ function fitText(text, font, fontSize, maxWidth) {
   }
 
   const ellipsis = '...';
-  const ellipsisWidth = font.widthOfTextAtSize(ellipsis, fontSize);
-  if (ellipsisWidth > maxWidth) return '';
-
-  const targetWidth = maxWidth - ellipsisWidth;
-  let low = 0;
-  let high = value.length;
-  let best = 0;
-
-  while (low <= high) {
-    const mid = (low + high) >> 1;
-    const substr = value.slice(0, mid).trimEnd();
-    if (font.widthOfTextAtSize(substr, fontSize) <= targetWidth) {
-      best = mid;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
+  let end = value.length;
+  while (end > 0) {
+    const candidate = `${value.slice(0, end).trimEnd()}${ellipsis}`;
+    if (font.widthOfTextAtSize(candidate, fontSize) <= maxWidth) {
+      return candidate;
     }
+    end -= 1;
   }
-
-  return `${value.slice(0, best).trimEnd()}${ellipsis}`;
+  return ellipsis;
 }
 
 // ---------- templates ----------
@@ -450,52 +273,46 @@ class ResumeCanvas {
       y = this.y,
       maxWidth,
       align = 'left',
-      lineHeight,
     } = options;
-
-    const safeValue = sanitizeForWinAnsi(value);
-    if (!safeValue) return;
 
     const font = this.currentFont(bold);
     const colorRgb = typeof color === 'string' ? hexToColor(color) : color;
-    const effectiveWidth = maxWidth || this.contentWidth;
-    const actualLineHeight = lineHeight || Math.round((size + 3.5) * 10) / 10;
 
-    if (maxWidth || align === 'center' || align === 'right') {
-      const lines = wrapText(safeValue, font, size, effectiveWidth);
-      let cursorY = (y === this.y) ? this.y : y;
+    if (!value) return;
+
+    if (maxWidth && align === 'left') {
+      const lines = wrapText(value, font, size, maxWidth);
+      let cursorY = y;
       lines.forEach((line) => {
-        if (cursorY + size + 2 > this.pageBottom()) {
+        if (cursorY + size + 3 > this.pageBottom()) {
           this.addPage();
-          cursorY = this.margins.top;
+          cursorY = this.y;
         }
-        const lineWidth = font.widthOfTextAtSize(line, size);
-        let drawX = x;
-        if (align === 'center') {
-          drawX = x + Math.max(0, (effectiveWidth - lineWidth) / 2);
-        } else if (align === 'right') {
-          drawX = x + Math.max(0, effectiveWidth - lineWidth);
-        }
-        this.page.drawText(line, {
-          x: drawX,
+        this.page.drawText(line || '', {
+          x,
           y: this.toPdfY_text(cursorY, size),
           size,
           font,
           color: colorRgb,
         });
-        cursorY += actualLineHeight;
+        cursorY += size + 3;
       });
       this.y = cursorY;
     } else {
       this.ensureSpace(size + 3);
-      this.page.drawText(safeValue, {
-        x,
-        y: this.toPdfY_text(this.y, size),
+      let drawX = x;
+      if (align === 'center') {
+        drawX = x + (maxWidth || this.contentWidth) / 2 - this.textWidth(value, size, bold) / 2;
+      } else if (align === 'right') {
+        drawX = x + (maxWidth || this.contentWidth) - this.textWidth(value, size, bold);
+      }
+      this.page.drawText(value, {
+        x: drawX,
+        y: this.toPdfY_text(y, size),
         size,
         font,
         color: colorRgb,
       });
-      this.y += actualLineHeight;
     }
   }
 
@@ -561,11 +378,8 @@ class ResumeCanvas {
 // ---------- section builders ----------
 
 function addSectionHeading(canvas, title) {
-  // Ensure enough space for the heading and at least the first item below it
-  canvas.ensureSpace(50);
-  if (canvas.y > canvas.margins.top + 6) {
-    canvas.moveDown(12);
-  }
+  canvas.ensureSpace(36);
+  canvas.moveDown(0.55);
   const y = canvas.y;
   const theme = canvas.theme;
 
@@ -578,13 +392,13 @@ function addSectionHeading(canvas, title) {
       theme.blue
     );
     canvas.drawText(title.toUpperCase(), {
-      size: 11,
+      size: 12,
       bold: true,
       color: '#FFFFFF',
       x: canvas.margins.left + 8,
       y: y + 4,
     });
-    canvas.y = y + 26;
+    canvas.moveDown(26);
   } else if (theme.headingStyle === 'technical') {
     canvas.drawRect(canvas.margins.left, y, 4, 20, theme.blue);
     canvas.drawRect(
@@ -595,13 +409,13 @@ function addSectionHeading(canvas, title) {
       theme.chip
     );
     canvas.drawText(title.toUpperCase(), {
-      size: 11,
+      size: 12,
       bold: true,
       color: theme.ink,
       x: canvas.margins.left + 10,
       y: y + 4,
     });
-    canvas.y = y + 26;
+    canvas.moveDown(26);
   } else if (theme.headingStyle === 'academic') {
     // Europass-style: uppercase heading with a thin colored rule beneath
     canvas.drawText(title.toUpperCase(), {
@@ -611,7 +425,7 @@ function addSectionHeading(canvas, title) {
       x: canvas.margins.left,
       y,
     });
-    const lineY = y + 16;
+    const lineY = y + 14;
     canvas.drawLine(
       canvas.margins.left,
       lineY,
@@ -620,7 +434,7 @@ function addSectionHeading(canvas, title) {
       theme.rule,
       0.75
     );
-    canvas.y = lineY + 8;
+    canvas.moveDown(18);
   } else {
     canvas.drawText(title.toUpperCase(), {
       size: 12,
@@ -629,7 +443,7 @@ function addSectionHeading(canvas, title) {
       x: canvas.margins.left,
       y,
     });
-    const lineY = y + 16;
+    const lineY = y + 14;
     canvas.drawLine(
       canvas.margins.left,
       lineY,
@@ -638,186 +452,172 @@ function addSectionHeading(canvas, title) {
       theme.rule,
       theme.headingStyle === 'european' ? 1 : 1.5
     );
-    canvas.y = lineY + 8;
+    canvas.moveDown(18);
   }
 }
 
 function addParagraph(canvas, value, options = {}) {
   const text = safeText(value);
   if (!text) return;
-  const size = options.size || 9.5;
-  const lineHeight = options.lineHeight || 13.5;
   canvas.drawText(text, {
-    size,
+    size: options.size || 9.5,
     color: options.color || canvas.theme.body,
     maxWidth: options.width || canvas.contentWidth,
-    align: options.align || 'left',
-    lineHeight,
   });
-  canvas.moveDown(4);
+  canvas.moveDown(3);
 }
 
 function addBulletPoint(canvas, value) {
   const text = safeText(value);
   if (!text) return;
   const font = canvas.currentFont(false);
-  const fontSize = 9.5;
-  const lineHeight = 13.5;
-  const textLeft = canvas.margins.left + 12;
-  const maxWidth = canvas.contentWidth - 12;
-  const wrapped = wrapText(text, font, fontSize, maxWidth);
+  const wrapped = wrapText(text, font, 9.5, canvas.contentWidth - 14);
   if (!wrapped.length) return;
 
-  // Keep bullet dot and first line together atomically
-  canvas.ensureSpace(lineHeight * Math.min(2, wrapped.length));
-
-  // Bullet dot aligned with lowercase character center of the first line
-  const dotX = canvas.margins.left + 3.5;
-  const firstLineBaseY = canvas.toPdfY_text(canvas.y, fontSize);
-  const dotPdfY = firstLineBaseY + 3.2;
-
+  // bullet dot — aligned to the first line's baseline
+  canvas.ensureSpace(12);
+  const dotX = canvas.margins.left + 2;
+  const dotY = canvas.y + 4;  // center of bullet dot, top-down
   canvas.page.drawCircle({
     x: dotX,
-    y: dotPdfY,
-    size: 1.5,
+    y: canvas.pageHeight - dotY,  // convert to pdf-lib Y
+    size: 1.6,
     color: hexToColor(canvas.theme.body),
   });
 
   wrapped.forEach((line) => {
-    if (canvas.y + lineHeight > canvas.pageBottom()) {
-      canvas.addPage();
-    }
+    canvas.ensureSpace(12);
     canvas.page.drawText(line || '', {
-      x: textLeft,
-      y: canvas.toPdfY_text(canvas.y, fontSize),
-      size: fontSize,
+      x: canvas.margins.left + 12,
+      y: canvas.toPdfY_text(canvas.y, 9.5),  // convert top-down Y to pdf-lib Y
+      size: 9.5,
       font,
       color: hexToColor(canvas.theme.body),
     });
-    canvas.y += lineHeight;
+    canvas.y += 11;
   });
   canvas.moveDown(3);
 }
 
 function addHeadingRow(canvas, leftText, rightText) {
-  const left = safeText(leftText);
-  const right = safeText(rightText);
-  if (!left && !right) return;
+  canvas.ensureSpace(16);
+  const leftWidth = canvas.contentWidth * 0.72;
+  const rightWidth = canvas.contentWidth * 0.28;
+  const startY = canvas.y;  // capture y BEFORE drawing either text
+  const leftValue = fitText(
+    leftText,
+    canvas.currentFont(true),
+    11,
+    leftWidth - 6
+  );
+  const rightValue = fitText(
+    rightText,
+    canvas.currentFont(true),
+    11,
+    rightWidth
+  );
 
-  const font = canvas.currentFont(true);
-  const fontSize = 11;
-  const lineHeight = 15;
-
-  const rightWidth = right ? font.widthOfTextAtSize(right, fontSize) + 12 : 0;
-  const leftMaxWidth = canvas.contentWidth - rightWidth;
-  const wrappedLeft = wrapText(left, font, fontSize, leftMaxWidth);
-
-  canvas.ensureSpace(lineHeight * Math.max(1, wrappedLeft.length));
-  const startY = canvas.y;
-
-  wrappedLeft.forEach((line, idx) => {
-    canvas.page.drawText(line, {
+  if (leftValue) {
+    canvas.page.drawText(leftValue, {
       x: canvas.margins.left,
-      y: canvas.toPdfY_text(startY + idx * lineHeight, fontSize),
-      size: fontSize,
-      font,
-      color: hexToColor(canvas.theme.body),
-    });
-  });
-
-  if (right) {
-    const rWidth = font.widthOfTextAtSize(right, fontSize);
-    canvas.page.drawText(right, {
-      x: canvas.pageWidth - canvas.margins.right - rWidth,
-      y: canvas.toPdfY_text(startY, fontSize),
-      size: fontSize,
-      font,
+      y: canvas.toPdfY_text(startY, 11),
+      size: 11,
+      font: canvas.currentFont(true),
       color: hexToColor(canvas.theme.body),
     });
   }
-
-  canvas.y = startY + (Math.max(1, wrappedLeft.length) * lineHeight) + 2;
+  if (rightValue) {
+    // Draw right text right-aligned at the same y
+    const rightTextWidth = canvas.textWidth(rightValue, 11, true);
+    canvas.page.drawText(rightValue, {
+      x: canvas.margins.left + leftWidth + rightWidth - rightTextWidth,
+      y: canvas.toPdfY_text(startY, 11),
+      size: 11,
+      font: canvas.currentFont(true),
+      color: hexToColor(canvas.theme.body),
+    });
+  }
+  canvas.y = startY + 14;  // move down once
 }
 
 function addSubheadingRow(canvas, leftText, rightText) {
-  const left = safeText(leftText);
-  const right = safeText(rightText);
-  if (!left && !right) return;
-
-  const leftFont = canvas.currentFont(true);
-  const rightFont = canvas.currentFont(false);
-  const fontSize = 9.2;
-  const lineHeight = 13;
-
-  const rightWidth = right ? rightFont.widthOfTextAtSize(right, 8.8) + 12 : 0;
-  const leftMaxWidth = canvas.contentWidth - rightWidth;
-  const wrappedLeft = wrapText(left, leftFont, fontSize, leftMaxWidth);
-
-  canvas.ensureSpace(lineHeight * Math.max(1, wrappedLeft.length));
+  canvas.ensureSpace(14);
+  const leftWidth = canvas.contentWidth * 0.72;
+  const rightWidth = canvas.contentWidth * 0.28;
   const startY = canvas.y;
+  const leftValue = fitText(
+    leftText,
+    canvas.currentFont(true),
+    9.2,
+    leftWidth - 6
+  );
+  const rightValue = fitText(
+    rightText,
+    canvas.currentFont(false),
+    8.8,
+    rightWidth
+  );
 
-  wrappedLeft.forEach((line, idx) => {
-    canvas.page.drawText(line, {
+  if (leftValue) {
+    canvas.page.drawText(leftValue, {
       x: canvas.margins.left,
-      y: canvas.toPdfY_text(startY + idx * lineHeight, fontSize),
-      size: fontSize,
-      font: leftFont,
+      y: canvas.toPdfY_text(startY, 9.2),
+      size: 9.2,
+      font: canvas.currentFont(true),
       color: hexToColor(canvas.theme.blue),
     });
-  });
-
-  if (right) {
-    const rWidth = rightFont.widthOfTextAtSize(right, 8.8);
-    canvas.page.drawText(right, {
-      x: canvas.pageWidth - canvas.margins.right - rWidth,
+  }
+  if (rightValue) {
+    const rightTextWidth = canvas.textWidth(rightValue, 8.8, false);
+    canvas.page.drawText(rightValue, {
+      x: canvas.margins.left + leftWidth + rightWidth - rightTextWidth,
       y: canvas.toPdfY_text(startY, 8.8),
       size: 8.8,
-      font: rightFont,
+      font: canvas.currentFont(false),
       color: hexToColor(canvas.theme.body),
     });
   }
-
-  canvas.y = startY + (Math.max(1, wrappedLeft.length) * lineHeight) + 2;
+  canvas.y = startY + 12;
 }
 
 function addMetaRow(canvas, leftText, rightText) {
-  const left = safeText(leftText);
-  const right = safeText(rightText);
-  if (!left && !right) return;
-
-  const font = canvas.currentFont(false);
-  const fontSize = 8.8;
-  const lineHeight = 12.5;
-
-  const rightWidth = right ? font.widthOfTextAtSize(right, fontSize) + 12 : 0;
-  const leftMaxWidth = canvas.contentWidth - rightWidth;
-  const wrappedLeft = wrapText(left, font, fontSize, leftMaxWidth);
-
-  canvas.ensureSpace(lineHeight * Math.max(1, wrappedLeft.length));
+  canvas.ensureSpace(12);
+  const leftWidth = canvas.contentWidth * 0.65;
+  const rightWidth = canvas.contentWidth * 0.35;
   const startY = canvas.y;
+  const leftValue = fitText(
+    leftText,
+    canvas.currentFont(false),
+    8.8,
+    leftWidth - 6
+  );
+  const rightValue = fitText(
+    rightText,
+    canvas.currentFont(false),
+    8.8,
+    rightWidth
+  );
 
-  wrappedLeft.forEach((line, idx) => {
-    canvas.page.drawText(line, {
+  if (leftValue) {
+    canvas.page.drawText(leftValue, {
       x: canvas.margins.left,
-      y: canvas.toPdfY_text(startY + idx * lineHeight, fontSize),
-      size: fontSize,
-      font,
-      color: hexToColor(canvas.theme.body),
-    });
-  });
-
-  if (right) {
-    const rWidth = font.widthOfTextAtSize(right, fontSize);
-    canvas.page.drawText(right, {
-      x: canvas.pageWidth - canvas.margins.right - rWidth,
-      y: canvas.toPdfY_text(startY, fontSize),
-      size: fontSize,
-      font,
+      y: canvas.toPdfY_text(startY, 8.8),
+      size: 8.8,
+      font: canvas.currentFont(false),
       color: hexToColor(canvas.theme.body),
     });
   }
-
-  canvas.y = startY + (Math.max(1, wrappedLeft.length) * lineHeight) + 2;
+  if (rightValue) {
+    const rightTextWidth = canvas.textWidth(rightValue, 8.8, false);
+    canvas.page.drawText(rightValue, {
+      x: canvas.margins.left + leftWidth + rightWidth - rightTextWidth,
+      y: canvas.toPdfY_text(startY, 8.8),
+      size: 8.8,
+      font: canvas.currentFont(false),
+      color: hexToColor(canvas.theme.body),
+    });
+  }
+  canvas.y = startY + 11;
 }
 
 function addSkills(canvas, skills) {
@@ -831,17 +631,15 @@ function addSkills(canvas, skills) {
   const left = canvas.margins.left;
   const right = canvas.pageWidth - canvas.margins.right;
   let x = left;
-  const lineHeight = 21;
-  const padding = 16;
+  let lineHeight = 19;
+  const padding = 22;
   const chipHeight = 17;
 
-  canvas.ensureSpace(chipHeight + 8);
-
   values.forEach((skill) => {
-    const displaySkill = fitText(skill, canvas.currentFont(false), 9, 140);
+    const displaySkill = fitText(skill, canvas.currentFont(false), 9, 128);
     const textWidth = canvas.textWidth(displaySkill, 9, false);
-    const chipWidth = Math.min(textWidth + padding, 160);
-    if (x !== left && x + chipWidth > right) {
+    const chipWidth = Math.min(textWidth + padding, 150);
+    if (x + chipWidth > right) {
       x = left;
       canvas.moveDown(lineHeight);
     }
@@ -849,16 +647,16 @@ function addSkills(canvas, skills) {
       canvas.addPage();
       x = left;
     }
-    const chipY = canvas.y;
+    const chipY = canvas.y;  // top of chip (top-down coords)
     canvas.drawRect(x, chipY, chipWidth, chipHeight, canvas.theme.chip);
     canvas.page.drawText(displaySkill, {
-      x: x + Math.round((chipWidth - textWidth) / 2),
+      x: x + 11,
       y: canvas.toPdfY_text(chipY + 4, 9),
       size: 9,
       font: canvas.currentFont(false),
       color: hexToColor(canvas.theme.blue),
     });
-    x += chipWidth + 8;
+    x += chipWidth + 9;
   });
   canvas.moveDown(lineHeight + 4);
 }
@@ -926,7 +724,12 @@ function addLanguagesBlock(canvas, languagesText) {
 
   addSectionHeading(canvas, 'Languages');
   lines.forEach((line) => {
-    addBulletPoint(canvas, line.replace(/^[•*-]\s*/, ''));
+    canvas.drawText(`•  ${line}`, {
+      size: 9.5,
+      color: canvas.theme.body,
+      maxWidth: canvas.contentWidth,
+    });
+    canvas.moveDown(11);
   });
   canvas.moveDown(4);
 }
@@ -944,7 +747,12 @@ function addReferencesBlock(canvas, referencesText) {
 
   const trimmed = text.trim();
   if (/^available on request\.?$/i.test(trimmed)) {
-    addParagraph(canvas, 'Available on request.');
+    canvas.drawText('Available on request.', {
+      size: 9.5,
+      color: canvas.theme.body,
+      maxWidth: canvas.contentWidth,
+    });
+    canvas.moveDown(10);
     return;
   }
 
@@ -962,8 +770,8 @@ function addReferencesBlock(canvas, referencesText) {
         bold: lineIdx === 0,
         color: lineIdx === 0 ? canvas.theme.ink : canvas.theme.body,
         maxWidth: canvas.contentWidth,
-        lineHeight: 13.5,
       });
+      canvas.moveDown(11);
     });
     if (idx < blocks.length - 1) canvas.moveDown(6);
   });

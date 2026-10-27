@@ -1,35 +1,18 @@
 import React, { useState } from 'react';
 import {
-  View,
-  Text,
-  Modal,
-  TouchableOpacity,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  TextInput,
-  FlatList,
+  View, Text, Modal, TouchableOpacity, ScrollView, StyleSheet,
+  Switch, TextInput,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import {
-  JOB_TYPES,
-  DATE_POSTED_OPTIONS,
-  EXPERIENCE_LEVELS,
-  SALARY_PRESETS,
-  COMMON_SKILLS,
+  JOB_TYPES, DATE_POSTED_OPTIONS, EXPERIENCE_LEVELS, SALARY_PRESETS, COMMON_SKILLS,
 } from '../../constants/config';
 
-/**
- * Filter modal for the Jobs screen.
- *
- * Props:
- *   visible       : boolean
- *   initial       : object — initial filter state
- *   onClose       : () => void
- *   onApply       : (filters) => void
- */
+import FilterChip from '../../components/ui/FilterChip';
+import Button from '../../components/ui/Button';
+
 export default function FilterPanel({ visible, initial = {}, onClose, onApply }) {
   const [remoteOnly, setRemoteOnly] = useState(Boolean(initial.remoteOnly));
   const [datePosted, setDatePosted] = useState(initial.datePosted || null);
@@ -37,12 +20,8 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
   const [salaryPreset, setSalaryPreset] = useState(
     SALARY_PRESETS.find((p) => p.label === initial.salaryPresetLabel) || SALARY_PRESETS[0]
   );
-  const [salaryMin, setSalaryMin] = useState(
-    initial.salaryMin ? String(initial.salaryMin) : ''
-  );
-  const [salaryMax, setSalaryMax] = useState(
-    initial.salaryMax ? String(initial.salaryMax) : ''
-  );
+  const [salaryMin, setSalaryMin] = useState(initial.salaryMin ? String(initial.salaryMin) : '');
+  const [salaryMax, setSalaryMax] = useState(initial.salaryMax ? String(initial.salaryMax) : '');
   const [selectedExperience, setSelectedExperience] = useState(
     Array.isArray(initial.experienceLevels) ? initial.experienceLevels : []
   );
@@ -69,11 +48,8 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
   const handleApply = () => {
     const minNum = salaryMin ? Number(salaryMin) : null;
     const maxNum = salaryMax ? Number(salaryMax) : null;
-
     onApply({
-      remoteOnly,
-      datePosted,
-      jobType,
+      remoteOnly, datePosted, jobType,
       salaryMin: Number.isFinite(minNum) && minNum > 0 ? minNum : null,
       salaryMax: Number.isFinite(maxNum) && maxNum > 0 ? maxNum : null,
       salaryPresetLabel: salaryPreset?.label || null,
@@ -96,7 +72,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
             <Ionicons name="close-outline" size={24} color={Colors.textPrimary} />
@@ -108,7 +83,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
         </View>
 
         <ScrollView style={styles.body} showsVerticalScrollIndicator={false}>
-          {/* Remote only */}
           <View style={styles.row}>
             <View style={styles.rowLabel}>
               <Ionicons name="wifi-outline" size={16} color={Colors.textPrimary} />
@@ -118,11 +92,10 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
               value={remoteOnly}
               onValueChange={setRemoteOnly}
               trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
+              thumbColor="#FFFFFF"
             />
           </View>
 
-          {/* Date posted */}
           <Text style={styles.sectionTitle}>Date posted</Text>
           <View style={styles.chipRow}>
             {DATE_POSTED_OPTIONS.map((opt) => (
@@ -135,7 +108,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
             ))}
           </View>
 
-          {/* Job type */}
           <Text style={styles.sectionTitle}>Job type</Text>
           <View style={styles.chipRow}>
             {JOB_TYPES.map((opt) => (
@@ -148,7 +120,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
             ))}
           </View>
 
-          {/* Experience level (multi-select) */}
           <Text style={styles.sectionTitle}>Experience level</Text>
           <View style={styles.chipRow}>
             {EXPERIENCE_LEVELS.map((opt) => (
@@ -161,7 +132,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
             ))}
           </View>
 
-          {/* Salary preset */}
           <Text style={styles.sectionTitle}>Salary (quick pick)</Text>
           <View style={styles.chipRow}>
             {SALARY_PRESETS.map((opt) => (
@@ -180,7 +150,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
             ))}
           </View>
 
-          {/* Salary custom range */}
           <Text style={styles.sectionTitle}>Salary range (custom)</Text>
           <View style={styles.salaryRow}>
             <TextInput
@@ -202,7 +171,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
             />
           </View>
 
-          {/* Skills (with suggestions) */}
           <Text style={styles.sectionTitle}>Skills match</Text>
           <Text style={styles.helperText}>
             Jobs whose description contains these skills will rank higher in results.
@@ -222,14 +190,19 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
               style={styles.addSkillButton}
               onPress={() => addSkill(skillInput)}
             >
-              <Ionicons name="add" size={18} color="#fff" />
+              <Ionicons name="add" size={18} color="#FFFFFF" />
             </TouchableOpacity>
           </View>
 
           {skills.length > 0 ? (
             <View style={styles.skillChipRow}>
               {skills.map((s) => (
-                <SkillChip key={s} label={s} onRemove={() => removeSkill(s)} />
+                <View key={s} style={styles.skillChip}>
+                  <Text style={styles.skillChipText}>{s}</Text>
+                  <TouchableOpacity onPress={() => removeSkill(s)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close" size={12} color={Colors.primary} />
+                  </TouchableOpacity>
+                </View>
               ))}
             </View>
           ) : null}
@@ -248,7 +221,6 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
                       label={s}
                       selected={false}
                       onPress={() => addSkill(s)}
-                      plusIcon
                     />
                   ))}
               </View>
@@ -258,60 +230,28 @@ export default function FilterPanel({ visible, initial = {}, onClose, onApply })
           <View style={{ height: 24 }} />
         </ScrollView>
 
-        {/* Footer */}
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.cancelButton} onPress={onClose} activeOpacity={0.8}>
-            <Text style={styles.cancelText}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.applyButton} onPress={handleApply} activeOpacity={0.85}>
-            <Text style={styles.applyText}>Apply filters</Text>
-          </TouchableOpacity>
+          <Button
+            label="Cancel"
+            variant="ghost"
+            size="md"
+            fullWidth
+            onPress={onClose}
+            style={styles.footerButton}
+          />
+          <Button
+            label="Apply filters"
+            variant="primary"
+            size="md"
+            icon="checkmark-outline"
+            iconPosition="left"
+            fullWidth
+            onPress={handleApply}
+            style={[styles.footerButton, { flex: 1.5 }]}
+          />
         </View>
       </View>
     </Modal>
-  );
-}
-
-function FilterChip({ label, selected, onPress, plusIcon }) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        styles.chip,
-        selected
-          ? { backgroundColor: Colors.primary, borderColor: Colors.primary }
-          : { backgroundColor: Colors.bgCard, borderColor: Colors.border },
-      ]}
-      activeOpacity={0.7}
-    >
-      {plusIcon ? (
-        <Ionicons
-          name="add-circle-outline"
-          size={11}
-          color={selected ? '#fff' : Colors.textMuted}
-          style={{ marginRight: 3 }}
-        />
-      ) : null}
-      <Text
-        style={[
-          styles.chipText,
-          { color: selected ? '#fff' : Colors.textSecondary },
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function SkillChip({ label, onRemove }) {
-  return (
-    <View style={styles.skillChip}>
-      <Text style={styles.skillChipText}>{label}</Text>
-      <TouchableOpacity onPress={onRemove} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-        <Ionicons name="close" size={12} color={Colors.primary} />
-      </TouchableOpacity>
-    </View>
   );
 }
 
@@ -382,18 +322,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
-  chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: Spacing.xs + 2,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-  },
-  chipText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '500',
-  },
   salaryRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -437,6 +365,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Shadows.primary,
   },
   skillChipRow: {
     flexDirection: 'row',
@@ -476,31 +405,5 @@ const styles = StyleSheet.create({
     borderTopColor: Colors.border,
     gap: Spacing.sm,
   },
-  cancelButton: {
-    flex: 1,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cancelText: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  applyButton: {
-    flex: 1.5,
-    paddingVertical: Spacing.sm + 2,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  applyText: {
-    fontSize: FontSizes.md,
-    fontWeight: '600',
-    color: '#fff',
-  },
+  footerButton: {},
 });

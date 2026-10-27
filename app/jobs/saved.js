@@ -1,18 +1,12 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback } from 'react';
 import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  StyleSheet,
-  RefreshControl,
+  View, Text, FlatList, StyleSheet, RefreshControl,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import useSavedJobsStore from '../../store/savedJobsStore';
-import { getCurrentUser } from '../../services/authService';
 import JobCard from '../../components/jobs/JobCard';
 import ErrorState from '../../components/ui/ErrorState';
 
@@ -24,8 +18,6 @@ export default function SavedJobsScreen() {
   const userId = useSavedJobsStore((s) => s.userId);
   const [refreshing, setRefreshing] = React.useState(false);
 
-  // Re-hydrate from cloud on focus (covers the multi-device case where
-  // user saved a job on another device and now opens this device)
   useFocusEffect(
     useCallback(() => {
       if (userId) hydrateFromCloud(userId).catch(() => {});
@@ -35,11 +27,8 @@ export default function SavedJobsScreen() {
   const handleRefresh = useCallback(async () => {
     if (!userId) return;
     setRefreshing(true);
-    try {
-      await hydrateFromCloud(userId);
-    } finally {
-      setRefreshing(false);
-    }
+    try { await hydrateFromCloud(userId); }
+    finally { setRefreshing(false); }
   }, [userId, hydrateFromCloud]);
 
   const openJobDetail = useCallback((job) => {
@@ -81,9 +70,7 @@ export default function SavedJobsScreen() {
               <Text style={styles.headerText}>
                 {savedJobs.length} saved {savedJobs.length === 1 ? 'job' : 'jobs'}
               </Text>
-              {isSyncing ? (
-                <Text style={styles.syncingText}>Syncing…</Text>
-              ) : null}
+              {isSyncing ? <Text style={styles.syncingText}>Syncing…</Text> : null}
             </View>
           ) : null
         }
@@ -101,19 +88,16 @@ export default function SavedJobsScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: Colors.bgPrimary,
-  },
+  screen: { flex: 1, backgroundColor: Colors.bgPrimary },
   syncBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs + 2,
-    backgroundColor: 'rgba(168, 92, 8, 0.08)',
+    backgroundColor: Colors.warningBg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(168, 92, 8, 0.18)',
+    borderBottomColor: 'rgba(245, 158, 11, 0.20)',
   },
   syncBannerText: {
     fontSize: FontSizes.xs,

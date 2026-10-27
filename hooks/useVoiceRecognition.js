@@ -8,24 +8,9 @@ import {
   useAudioRecorderState,
 } from 'expo-audio';
 
-import { interviewAPI, makeAbortable, isAbortError } from '../services/api';
+import { interviewAPI } from '../services/api';
 import useInterviewStore from '../store/interviewStore';
 
-/**
- * useVoiceRecognition
- *
- * Audio recording + transcription hook for the interview session screen.
- *
- * Memory-leak fixes vs. the original:
- *   1. On unmount we now stop the recorder if it's running (previously
- *      the audio session stayed active and the file handle leaked).
- *   2. The transcription axios call now uses an AbortController so the
- *      request is cancelled if the screen unmounts mid-upload (previously
- *      the response would land on an unmounted component and trigger a
- *      "Can't perform a React state update on unmounted component" warning).
- *   3. `mounted` ref gates every setState so async callbacks can't update
- *      state after unmount.
- */
 export const useVoiceRecognition = () => {
   const currentLanguage = useInterviewStore((state) => state.currentLanguage);
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
@@ -37,16 +22,18 @@ export const useVoiceRecognition = () => {
 
   const timeoutRef = useRef(null);
   const stoppingRef = useRef(false);
-  const mountedRef = useRef(true);
-  const abortRef = useRef(null);
 
   useEffect(() => {
-    mountedRef.current = true;
+    let mounted = true;
 
     const configureAudio = async () => {
       try {
-        const permission = await AudioModule.requestRecordingPermissionsAsync();
-        if (!mountedRef.current) return;
+        const permission =
+          await AudioModule.requestRecordingPermissionsAsync();
+
+        if (!mounted) {
+          return;
+        }
 
         setHasPermission(permission.granted);
 
@@ -64,43 +51,34 @@ export const useVoiceRecognition = () => {
         });
       } catch (error) {
         console.error('Audio initialization failed:', error);
-        if (mountedRef.current) setHasPermission(false);
+
+        if (mounted) {
+          setHasPermission(false);
+        }
       }
     };
 
     configureAudio();
 
     return () => {
-      mountedRef.current = false;
+      mounted = false;
 
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
-
-      // Abort any in-flight transcription request so its response doesn't
-      // try to setState on an unmounted component.
-      if (abortRef.current) {
-        abortRef.current.abort();
-        abortRef.current = null;
-      }
-
-      // Stop the recorder if it's still running (audio session + file handle leak fix)
-      try {
-        if (recorderState.isRecording && typeof audioRecorder.stop === 'function') {
-          audioRecorder.stop();
-        }
-      } catch {
-        // ignore — already stopped or never started
-      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const stopListening = useCallback(
     async (currentText = '', onResult = () => {}) => {
-      if (stoppingRef.current) return;
-      if (!isListening && !recorderState.isRecording) return;
+      if (stoppingRef.current) {
+        return;
+      }
+
+      if (!isListening && !recorderState.isRecording) {
+        return;
+      }
 
       stoppingRef.current = true;
 
@@ -109,32 +87,24 @@ export const useVoiceRecognition = () => {
         timeoutRef.current = null;
       }
 
-      if (mountedRef.current) {
-        setIsListening(false);
-        setIsTranscribing(true);
-      }
-
-      // AbortController for this transcription request
-      const ctrl = makeAbortable();
-      abortRef.current = ctrl;
+      setIsListening(false);
+      setIsTranscribing(true);
 
       try {
         await audioRecorder.stop();
-        if (!mountedRef.current) return;
 
         const uri = audioRecorder.uri;
-        if (!uri) throw new Error('The audio recorder did not return a file URI.');
 
-        const response = await interviewAPI.transcribeAudio(
-          uri,
-          currentLanguage,
-          ctrl.signal
-        );
+        if (!uri) {
+          throw new Error('The audio recorder did not return a file URI.');
+        }
 
-        if (!mountedRef.current) return;
+        const response = await interviewAPI.transcribeAudio(uri, currentLanguage);
 
         if (!response?.success) {
-          throw new Error(response?.message || 'The transcription request failed.');
+          throw new Error(
+            response?.message || 'The transcription request failed.'
+          );
         }
 
         const transcript =
@@ -142,7 +112,9 @@ export const useVoiceRecognition = () => {
             ? response.data
             : response.data?.text;
 
-        if (!transcript) throw new Error('The backend returned an empty transcript.');
+        if (!transcript) {
+          throw new Error('The backend returned an empty transcript.');
+        }
 
         const finalText = currentText
           ? `${currentText} ${transcript}`.trim()
@@ -150,33 +122,38 @@ export const useVoiceRecognition = () => {
 
         onResult(finalText);
       } catch (error) {
-        if (isAbortError(error)) return; // expected on unmount / cancel
         console.error('Transcription failed:', error);
-        if (mountedRef.current) {
-          Alert.alert(
-            'Transcription failed',
-            error?.message || 'Failed to process audio. Please try again.'
-          );
-        }
+
+        Alert.alert(
+          'Transcription failed',
+          error?.message || 'Failed to process audio. Please try again.'
+        );
       } finally {
         stoppingRef.current = false;
-        if (abortRef.current === ctrl) abortRef.current = null;
-        if (mountedRef.current) setIsTranscribing(false);
+        setIsTranscribing(false);
       }
     },
-    [audioRecorder, currentLanguage, isListening, recorderState.isRecording]
+    [
+      audioRecorder,
+      currentLanguage,
+      isListening,
+      recorderState.isRecording,
+    ]
   );
 
   const startListening = useCallback(
     async (currentText = '', onResult = () => {}) => {
-      if (isListening || recorderState.isRecording || isTranscribing) return;
+      if (isListening || recorderState.isRecording || isTranscribing) {
+        return;
+      }
 
       try {
         let permissionGranted = hasPermission;
 
         if (!permissionGranted) {
-          const permission = await AudioModule.requestRecordingPermissionsAsync();
-          if (!mountedRef.current) return;
+          const permission =
+            await AudioModule.requestRecordingPermissionsAsync();
+
           permissionGranted = permission.granted;
           setHasPermission(permissionGranted);
         }
@@ -197,11 +174,6 @@ export const useVoiceRecognition = () => {
         await audioRecorder.prepareToRecordAsync();
         audioRecorder.record();
 
-        if (!mountedRef.current) {
-          try { audioRecorder.stop(); } catch {}
-          return;
-        }
-
         setIsListening(true);
 
         timeoutRef.current = setTimeout(() => {
@@ -209,7 +181,8 @@ export const useVoiceRecognition = () => {
         }, 60000);
       } catch (error) {
         console.error('Failed to start recording:', error);
-        if (mountedRef.current) setIsListening(false);
+        setIsListening(false);
+
         Alert.alert(
           'Recording failed',
           error?.message || 'Unable to start microphone recording.'

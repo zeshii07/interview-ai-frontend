@@ -14,12 +14,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, router } from 'expo-router';
 
-import { Colors, Spacing, FontSizes, Radius, Gradients } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import { jobsAPI, makeAbortable, isAbortError } from '../../services/api';
 import { getCurrentUser } from '../../services/authService';
 import useSavedJobsStore from '../../store/savedJobsStore';
 import JobCard from '../../components/jobs/JobCard';
 import FilterPanel from '../../components/jobs/FilterPanel';
+import FilterChip from '../../components/ui/FilterChip';
 import ErrorState from '../../components/ui/ErrorState';
 import SlowNetworkBanner from '../../components/ui/SlowNetworkBanner';
 
@@ -34,6 +35,13 @@ const DEFAULT_FILTERS = {
   experienceLevels: [],
   skills: [],
 };
+
+const QUICK_FILTERS = [
+  { id: 'remote', label: 'Remote', icon: 'wifi-outline' },
+  { id: '24h', label: 'Past 24h', icon: 'time-outline' },
+  { id: 'full_time', label: 'Full-time', icon: 'briefcase-outline' },
+  { id: '7d', label: 'Past 7 days', icon: 'calendar-outline' },
+];
 
 export default function JobsScreen() {
   const [query, setQuery] = useState('');
@@ -51,12 +59,9 @@ export default function JobsScreen() {
   const [hasSearched, setHasSearched] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // AbortController for the in-flight search — cancelled on unmount and on
-  // every new search. This is the memory-leak fix for the screen.
   const abortRef = useRef(null);
   const lastSearchParamsRef = useRef(null);
 
-  // Wire saved-jobs store to the current user once per focus
   const setUserId = useSavedJobsStore((s) => s.setUserId);
   useFocusEffect(
     useCallback(() => {
@@ -95,7 +100,6 @@ export default function JobsScreen() {
 
   const runSearch = useCallback(
     async (params, { append = false } = {}) => {
-      // Cancel any in-flight search
       if (abortRef.current) abortRef.current.abort();
       const ctrl = makeAbortable();
       abortRef.current = ctrl;
@@ -110,9 +114,7 @@ export default function JobsScreen() {
       try {
         const result = await jobsAPI.search(params, ctrl.signal);
         if (ctrl.signal.aborted) return;
-
         const newJobs = Array.isArray(result?.jobs) ? result.jobs : [];
-
         setJobs((prev) => (append ? [...prev, ...newJobs] : newJobs));
         setProviders(result?.providers || []);
         setTotal(result?.total || 0);
@@ -165,12 +167,8 @@ export default function JobsScreen() {
     (newFilters) => {
       setFilters({ ...DEFAULT_FILTERS, ...newFilters });
       setFilterPanelOpen(false);
-      // Re-run search with the new filters if a search has already happened
       if (hasSearched && lastSearchParamsRef.current) {
-        const params = buildSearchParams({
-          ...newFilters,
-          page: 1,
-        });
+        const params = buildSearchParams({ ...newFilters, page: 1 });
         lastSearchParamsRef.current = params;
         runSearch(params);
       }
@@ -178,7 +176,18 @@ export default function JobsScreen() {
     [buildSearchParams, runSearch, hasSearched]
   );
 
-  // Cleanup: abort any in-flight search when the screen unmounts
+  // Quick filter toggle for the chip row
+  const toggleQuickFilter = useCallback((id) => {
+    setFilters((prev) => {
+      const next = { ...prev };
+      if (id === 'remote') next.remoteOnly = !prev.remoteOnly;
+      else if (id === '24h') next.datePosted = prev.datePosted === '24h' ? null : '24h';
+      else if (id === '7d') next.datePosted = prev.datePosted === '7d' ? null : '7d';
+      else if (id === 'full_time') next.jobType = prev.jobType === 'full_time' ? null : 'full_time';
+      return next;
+    });
+  }, []);
+
   useEffect(() => {
     return () => {
       if (abortRef.current) {
@@ -190,8 +199,6 @@ export default function JobsScreen() {
 
   const openJobDetail = useCallback((job) => {
     if (!job?.id) return;
-    // Pass the job payload through router params (URL-encoded JSON).
-    // For large descriptions we cap to 600 chars server-side anyway.
     router.push({
       pathname: '/jobs/detail',
       params: { job: encodeURIComponent(JSON.stringify(job)) },
@@ -240,11 +247,20 @@ export default function JobsScreen() {
     );
   };
 
+  // Map quick filters to chip state
+  const quickFilterState = {
+    remote: filters.remoteOnly,
+    '24h': filters.datePosted === '24h',
+    '7d': filters.datePosted === '7d',
+    full_time: filters.jobType === 'full_time',
+  };
+
   return (
     <View style={styles.screen}>
       <SlowNetworkBanner />
 
-      {/* Search header */}
+      {/* Search header — light background, no gradient (we reserve gradient
+          for the Home hero per the design system) */}
       <View style={styles.searchHeader}>
         <View style={styles.searchRow}>
           <View style={styles.searchInputWrap}>
@@ -269,14 +285,14 @@ export default function JobsScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.filterButton, activeFilterCount > 0 ? styles.filterButtonActive : null]}
+            style={[styles.filterButton, activeFilterCount > 0 && styles.filterButtonActive]}
             onPress={() => setFilterPanelOpen(true)}
             activeOpacity={0.8}
           >
             <Ionicons
               name="options-outline"
               size={18}
-              color={activeFilterCount > 0 ? '#fff' : Colors.textPrimary}
+              color={activeFilterCount > 0 ? '#FFFFFF' : Colors.textPrimary}
             />
             {activeFilterCount > 0 ? (
               <View style={styles.filterBadge}>
@@ -304,6 +320,23 @@ export default function JobsScreen() {
             <Text style={styles.searchButtonText}>Search</Text>
           </TouchableOpacity>
         </View>
+
+        {/* Quick filter chips */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickFilterRow}
+        >
+          {QUICK_FILTERS.map((f) => (
+            <FilterChip
+              key={f.id}
+              label={f.label}
+              icon={f.icon}
+              selected={quickFilterState[f.id]}
+              onPress={() => toggleQuickFilter(f.id)}
+            />
+          ))}
+        </ScrollView>
       </View>
 
       {/* Provider status */}
@@ -314,14 +347,9 @@ export default function JobsScreen() {
             {providers.map((p) => (
               <View
                 key={p.id}
-                style={[
-                  styles.providerChip,
-                  p.ok ? styles.providerChipOk : styles.providerChipErr,
-                ]}
+                style={[styles.providerChip, p.ok ? styles.providerChipOk : styles.providerChipErr]}
               >
-                <Text style={styles.providerChipText}>
-                  {p.label}
-                </Text>
+                <Text style={styles.providerChipText}>{p.label}</Text>
                 <Text style={styles.providerChipCount}>{p.count}</Text>
               </View>
             ))}
@@ -329,7 +357,7 @@ export default function JobsScreen() {
         </View>
       ) : null}
 
-      {/* Skills preview (shows active skills as chips) */}
+      {/* Skills preview */}
       {filters.skills.length > 0 ? (
         <View style={styles.skillsPreviewRow}>
           <Ionicons name="sparkles-outline" size={12} color={Colors.primary} />
@@ -356,7 +384,12 @@ export default function JobsScreen() {
         }
         ListFooterComponent={renderFooter}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} colors={[Colors.primary]} tintColor={Colors.primary} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
         }
         onEndReached={handleLoadMore}
         onEndReachedThreshold={0.5}
@@ -373,8 +406,6 @@ export default function JobsScreen() {
   );
 }
 
-// Inline ScrollView import (used above for provider chips) — keep React import graph tidy
-
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -384,7 +415,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     gap: Spacing.sm,
@@ -453,7 +484,7 @@ const styles = StyleSheet.create({
   filterBadgeText: {
     fontSize: 10,
     fontWeight: '700',
-    color: '#fff',
+    color: '#FFFFFF',
   },
   searchButton: {
     paddingHorizontal: Spacing.lg,
@@ -462,17 +493,22 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
+    ...Shadows.primary,
   },
   searchButtonText: {
     fontSize: FontSizes.sm,
     fontWeight: '600',
-    color: '#fff',
+    color: '#FFFFFF',
+  },
+  quickFilterRow: {
+    gap: Spacing.xs + 2,
+    paddingTop: Spacing.xs,
   },
   providerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingVertical: Spacing.xs + 2,
     gap: Spacing.xs,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
@@ -494,10 +530,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.sm,
   },
   providerChipOk: {
-    backgroundColor: 'rgba(8, 122, 85, 0.08)',
+    backgroundColor: Colors.successBg,
   },
   providerChipErr: {
-    backgroundColor: 'rgba(185, 47, 69, 0.08)',
+    backgroundColor: Colors.errorBg,
   },
   providerChipText: {
     fontSize: 11,

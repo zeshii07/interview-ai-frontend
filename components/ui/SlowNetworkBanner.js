@@ -2,16 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius } from '../constants/theme';
-import { subscribeSlowNetwork } from '../services/api';
+import { Colors, Spacing, FontSizes } from '../../constants/theme';
+import { subscribeSlowNetwork } from '../../services/api';
 
 /**
+ * SlowNetworkBanner
+ *
  * Banner that appears at the top of the screen when the API layer has been
  * waiting more than 12 seconds on a request. Auto-dismisses as soon as a
  * response arrives.
- *
- * Mount once near the root of the authed area (e.g. inside the (tabs)
- * layout) — it self-hides when not needed.
  */
 export default function SlowNetworkBanner() {
   const [slow, setSlow] = useState(false);
@@ -38,9 +37,9 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
-    backgroundColor: 'rgba(168, 92, 8, 0.08)',
+    backgroundColor: Colors.warningBg,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(168, 92, 8, 0.18)',
+    borderBottomColor: 'rgba(245, 158, 11, 0.20)',
   },
   text: {
     fontSize: FontSizes.xs,

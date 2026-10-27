@@ -5,20 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
 
 /**
- * Reusable error / empty / loading state card.
- *
- * Usage:
- *   <ErrorState
- *     variant="error"
- *     title="Couldn't load jobs"
- *     message="Check your connection and try again."
- *     onRetry={() => refetch()}
- *   />
+ * ErrorState — reskinned with the new palette.
  *
  * Variants:
- *   - error     : red-tinted icon + retry button
- *   - empty     : muted icon, no retry
- *   - loading   : spinner, no buttons
+ *   - error  : indigo-tinted icon + "Try again" button
+ *   - empty  : muted icon, no retry
+ *   - loading : spinner, no buttons
  */
 export default function ErrorState({
   variant = 'error',
@@ -32,7 +24,7 @@ export default function ErrorState({
     error: {
       icon: icon || 'cloud-offline-outline',
       iconColor: Colors.error,
-      iconBg: 'rgba(185, 47, 69, 0.10)',
+      iconBg: Colors.errorBg,
     },
     empty: {
       icon: icon || 'search-outline',
@@ -65,7 +57,7 @@ export default function ErrorState({
           onPress={onRetry}
           activeOpacity={0.8}
         >
-          <Ionicons name="refresh-outline" size={16} color={Colors.primary} />
+          <Ionicons name="refresh-outline" size={14} color={Colors.primary} />
           <Text style={styles.retryText}>{retryLabel}</Text>
         </TouchableOpacity>
       ) : null}
@@ -78,7 +70,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.l,
+    paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.xl,
   },
   iconWrap: {

@@ -9,33 +9,6 @@ import {
   clearCloudSavedJobs,
 } from '../services/savedJobsService';
 
-/**
- * Saved-jobs store.
- *
- * - Source of truth for the UI.
- * - Persisted to AsyncStorage so saved jobs survive app restarts.
- * - Synced to Firebase RTDB under users/{uid}/savedJobs for cross-device
- *   sync (when `userId` is provided).
- *
- * Job shape (stored):
- *   {
- *     id            : string  — provider-prefixed id ("adzuna:abc")
- *     provider      : string
- *     providerLabel : string
- *     title         : string
- *     company       : string
- *     location      : string
- *     isRemote      : boolean
- *     url           : string | null
- *     postedAt      : string | null  (ISO date)
- *     salary        : { min, max, currency, predicted } | null
- *     experienceLevel: string
- *     description   : string (truncated to 600 chars to keep RTDB payload small)
- *     matchScore    : number
- *     savedAt       : string  (ISO date — set on save)
- *   }
- */
-
 const MAX_DESCRIPTION_LENGTH = 600;
 
 const compactJob = (job) => ({
@@ -50,9 +23,7 @@ const compactJob = (job) => ({
   postedAt: job?.postedAt || null,
   salary: job?.salary || null,
   experienceLevel: job?.experienceLevel || 'unspecified',
-  description: job?.description
-    ? String(job.description).slice(0, MAX_DESCRIPTION_LENGTH)
-    : '',
+  description: job?.description ? String(job.description).slice(0, MAX_DESCRIPTION_LENGTH) : '',
   matchScore: Number(job?.matchScore) || 0,
 });
 
@@ -69,12 +40,8 @@ const useSavedJobsStore = create(
         const next = userId || null;
         if (get().userId === next) return;
         set({ userId: next, cloudSynced: false });
-        // Re-hydrate from cloud when the user changes (login / switch)
-        if (next) {
-          get().hydrateFromCloud(next).catch(() => {});
-        } else {
-          set({ savedJobs: [] });
-        }
+        if (next) get().hydrateFromCloud(next).catch(() => {});
+        else set({ savedJobs: [] });
       },
 
       hydrateFromCloud: async (userId) => {
@@ -82,8 +49,6 @@ const useSavedJobsStore = create(
         set({ isSyncing: true, syncError: null });
         try {
           const cloudJobs = await loadCloudSavedJobs(userId);
-          // Merge cloud jobs with whatever's already in local storage.
-          // Cloud wins on conflict (newest savedAt).
           const local = get().savedJobs;
           const byId = new Map();
           for (const j of local) byId.set(j.id, j);
@@ -105,60 +70,41 @@ const useSavedJobsStore = create(
       saveJob: async (job) => {
         if (!job?.id) return;
         const compact = compactJob(job);
-        const existing = get().savedJobs.find((j) => j.id === compact.id);
-        if (existing) return; // already saved — no-op
-
+        if (get().savedJobs.some((j) => j.id === compact.id)) return;
         const stamped = { ...compact, savedAt: new Date().toISOString() };
         set({ savedJobs: [stamped, ...get().savedJobs] });
-
         const userId = get().userId;
         if (userId) {
-          try {
-            await saveCloudJob(userId, stamped);
-          } catch (err) {
-            // Cloud save failed — keep the local entry (it'll sync later).
-            console.warn('[savedJobsStore.saveJob] cloud sync failed:', err);
-          }
+          try { await saveCloudJob(userId, stamped); }
+          catch (err) { console.warn('[savedJobsStore.saveJob] cloud sync failed:', err); }
         }
       },
 
       unsaveJob: async (jobId) => {
         if (!jobId) return;
         set({ savedJobs: get().savedJobs.filter((j) => j.id !== jobId) });
-
         const userId = get().userId;
         if (userId) {
-          try {
-            await unsaveCloudJob(userId, jobId);
-          } catch (err) {
-            console.warn('[savedJobsStore.unsaveJob] cloud sync failed:', err);
-          }
+          try { await unsaveCloudJob(userId, jobId); }
+          catch (err) { console.warn('[savedJobsStore.unsaveJob] cloud sync failed:', err); }
         }
       },
 
       toggleSaved: async (job) => {
         if (!job?.id) return;
-        if (get().isSaved(job.id)) {
-          await get().unsaveJob(job.id);
-        } else {
-          await get().saveJob(job);
-        }
+        if (get().isSaved(job.id)) await get().unsaveJob(job.id);
+        else await get().saveJob(job);
       },
 
       clearAll: async () => {
         const userId = get().userId;
         set({ savedJobs: [] });
         if (userId) {
-          try {
-            await clearCloudSavedJobs(userId);
-          } catch (err) {
-            console.warn('[savedJobsStore.clearAll] cloud sync failed:', err);
-          }
+          try { await clearCloudSavedJobs(userId); }
+          catch (err) { console.warn('[savedJobsStore.clearAll] cloud sync failed:', err); }
         }
       },
 
-      // Called from authService.clearSignedOutLocalState to wipe local state
-      // on logout (mirrors the interviewStore.clearUserState pattern).
       clearUserState: () => {
         set({ savedJobs: [], userId: null, cloudSynced: false });
       },
@@ -166,7 +112,6 @@ const useSavedJobsStore = create(
     {
       name: 'hirely-saved-jobs-v1',
       storage: createJSONStorage(() => AsyncStorage),
-      // Only persist the saved jobs themselves — userId is set on login.
       partialize: (state) => ({ savedJobs: state.savedJobs }),
     }
   )

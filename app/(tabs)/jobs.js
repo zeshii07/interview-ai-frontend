@@ -3,14 +3,12 @@ import { TouchableOpacity, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack } from 'expo-router';
 
-import { Colors, Spacing } from '../../constants/theme';
+import { Colors } from '../../constants/theme';
 import JobsScreen from '../jobs/index';
 
 /**
- * Tab screen for "Jobs".
- *
- * Renders the in-app <JobsScreen/> with a custom header that exposes
- * a "Saved" button → /jobs/saved route.
+ * Tab screen for "Jobs" — wraps the redesigned JobsScreen and adds a
+ * "Saved jobs" link in the header.
  */
 export default function JobsTabScreen() {
   return (
@@ -38,7 +36,3 @@ export default function JobsTabScreen() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bgPrimary },
-});

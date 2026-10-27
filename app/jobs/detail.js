@@ -1,28 +1,23 @@
 import React, { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-  Linking,
-  Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Linking, Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import useSavedJobsStore from '../../store/savedJobsStore';
 import ErrorState from '../../components/ui/ErrorState';
+import Badge from '../../components/ui/Badge';
+import GradientHero from '../../components/ui/GradientHero';
 
 function formatSalary(salary) {
   if (!salary || (!salary.min && !salary.max)) return null;
-  const fmt = (n) => {
-    if (n >= 1000) return `$${Math.round(n / 1000)}k`;
-    return `$${n}`;
-  };
-  if (salary.min && salary.max) return `${fmt(salary.min)} – ${fmt(salary.max)}${salary.currency && salary.currency !== 'USD' ? ` ${salary.currency}` : ''}`;
+  const fmt = (n) => (n >= 1000 ? `$${Math.round(n / 1000)}k` : `$${n}`);
+  if (salary.min && salary.max) {
+    return `${fmt(salary.min)} – ${fmt(salary.max)}${salary.currency && salary.currency !== 'USD' ? ` ${salary.currency}` : ''}`;
+  }
   if (salary.min) return `${fmt(salary.min)}+`;
   if (salary.max) return `up to ${fmt(salary.max)}`;
   return null;
@@ -39,8 +34,7 @@ export default function JobDetailScreen() {
   const params = useLocalSearchParams();
   const [job, setJob] = useState(() => {
     try {
-      const raw = params.job ? JSON.parse(decodeURIComponent(params.job)) : null;
-      return raw;
+      return params.job ? JSON.parse(decodeURIComponent(params.job)) : null;
     } catch {
       return null;
     }
@@ -55,8 +49,6 @@ export default function JobDetailScreen() {
       return;
     }
     try {
-      // Prefer expo-web-browser for an in-app browser sheet (better UX,
-      // returns to the app when done). Falls back to system browser.
       await WebBrowser.openBrowserAsync(job.url, {
         presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
         toolbarColor: Colors.primary,
@@ -72,11 +64,7 @@ export default function JobDetailScreen() {
 
   const handleSave = useCallback(async () => {
     if (!job) return;
-    try {
-      await toggleSaved(job);
-    } catch {
-      // store handles errors internally; nothing to show
-    }
+    try { await toggleSaved(job); } catch { /* store handles errors */ }
   }, [job, toggleSaved]);
 
   if (!job) {
@@ -93,75 +81,60 @@ export default function JobDetailScreen() {
 
   const salaryText = formatSalary(job.salary);
   const postedText = formatPostedAt(job.postedAt);
+  const matchScore = typeof job.matchScore === 'number' ? job.matchScore : null;
 
   return (
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Header card */}
-        <View style={styles.headerCard}>
-          <View style={styles.headerTopRow}>
-            <View style={styles.providerBadge}>
-              <Text style={styles.providerText}>
-                {job.providerLabel || job.provider || 'Job'}
-              </Text>
+        {/* Gradient hero header — provider + match score on the right */}
+        <GradientHero style={styles.detailHero}>
+          <View style={styles.heroRow}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.providerBadge}>
+                <Text style={styles.providerText}>
+                  {job.providerLabel || job.provider || 'Job'}
+                </Text>
+              </View>
+              <Text style={styles.heroTitle}>{job.title}</Text>
             </View>
-            <TouchableOpacity
-              onPress={handleSave}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons
-                name={isSaved ? 'bookmark' : 'bookmark-outline'}
-                size={22}
-                color={isSaved ? Colors.primary : Colors.textMuted}
-              />
-            </TouchableOpacity>
+
+            {matchScore !== null ? (
+              <View style={styles.matchRing}>
+                <Text style={styles.matchValue}>{matchScore}</Text>
+                <Text style={styles.matchPercent}>% match</Text>
+              </View>
+            ) : null}
           </View>
 
-          <Text style={styles.title}>{job.title}</Text>
-
-          <View style={styles.metaRow}>
-            <Ionicons name="business-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.metaText}>{job.company}</Text>
-          </View>
-
-          <View style={styles.metaRow}>
-            <Ionicons name="location-outline" size={14} color={Colors.textMuted} />
-            <Text style={styles.metaText}>{job.location}</Text>
+          <View style={styles.heroMetaRow}>
+            <View style={styles.heroMetaItem}>
+              <Ionicons name="business-outline" size={14} color={Colors.textOnDarkMuted} />
+              <Text style={styles.heroMetaText}>{job.company}</Text>
+            </View>
+            <View style={styles.heroMetaItem}>
+              <Ionicons name="location-outline" size={14} color={Colors.textOnDarkMuted} />
+              <Text style={styles.heroMetaText}>{job.location}</Text>
+            </View>
             {job.isRemote ? (
               <View style={styles.remotePill}>
                 <Text style={styles.remotePillText}>Remote</Text>
               </View>
             ) : null}
           </View>
+        </GradientHero>
 
-          {(salaryText || postedText || job.experienceLevel !== 'unspecified') && (
-            <View style={styles.tagRow}>
-              {salaryText ? (
-                <View style={styles.salaryTag}>
-                  <Ionicons name="cash-outline" size={11} color={Colors.success} />
-                  <Text style={styles.salaryText}>{salaryText}</Text>
-                </View>
-              ) : null}
-              {job.experienceLevel && job.experienceLevel !== 'unspecified' ? (
-                <View style={styles.expTag}>
-                  <Text style={styles.expText}>{job.experienceLevel}</Text>
-                </View>
-              ) : null}
-              {postedText ? (
-                <View style={styles.postedTag}>
-                  <Text style={styles.postedText}>Posted {postedText}</Text>
-                </View>
-              ) : null}
-            </View>
-          )}
-
-          {typeof job.matchScore === 'number' && job.matchScore > 0 ? (
-            <View style={styles.matchRow}>
-              <Ionicons name="sparkles-outline" size={12} color={Colors.primary} />
-              <Text style={styles.matchText}>{job.matchScore}% skills match</Text>
-            </View>
-          ) : null}
-        </View>
+        {/* Tags row */}
+        {(salaryText || postedText || job.experienceLevel !== 'unspecified') ? (
+          <View style={styles.tagsRow}>
+            {salaryText ? (
+              <Badge label={salaryText} variant="success" icon="cash-outline" size="md" />
+            ) : null}
+            {job.experienceLevel && job.experienceLevel !== 'unspecified' ? (
+              <Badge label={job.experienceLevel} variant="primary" size="md" />
+            ) : null}
+            {postedText ? <Badge label={`Posted ${postedText}`} variant="neutral" size="md" /> : null}
+          </View>
+        ) : null}
 
         {/* Description */}
         {job.description ? (
@@ -171,11 +144,10 @@ export default function JobDetailScreen() {
           </View>
         ) : null}
 
-        {/* Apply CTA — sticky-feeling at the bottom of the scroll view */}
-        <View style={{ height: 80 }} />
+        <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* Floating apply bar */}
+      {/* Sticky apply bar */}
       <View style={styles.applyBar}>
         <TouchableOpacity
           style={styles.saveApplyButton}
@@ -187,18 +159,14 @@ export default function JobDetailScreen() {
             size={18}
             color={Colors.primary}
           />
-          <Text style={styles.saveApplyText}>
-            {isSaved ? 'Saved' : 'Save'}
-          </Text>
+          <Text style={styles.saveApplyText}>{isSaved ? 'Saved' : 'Save'}</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.applyButton}
-          onPress={handleApply}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="open-outline" size={16} color="#fff" />
-          <Text style={styles.applyButtonText}>Apply on {job.providerLabel || 'source site'}</Text>
+        <TouchableOpacity style={styles.applyButton} onPress={handleApply} activeOpacity={0.85}>
+          <Ionicons name="open-outline" size={16} color="#FFFFFF" />
+          <Text style={styles.applyButtonText}>
+            Apply on {job.providerLabel || 'source site'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -211,56 +179,81 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPrimary,
   },
   content: {
-    padding: Spacing.md,
     paddingBottom: Spacing.xl,
   },
-  headerCard: {
-    backgroundColor: Colors.bgCard,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
+  detailHero: {
+    borderBottomLeftRadius: Radius.xxl,
+    borderBottomRightRadius: Radius.xxl,
+    paddingBottom: Spacing.lg,
     marginBottom: Spacing.md,
   },
-  headerTopRow: {
+  heroRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: Spacing.xs,
+    gap: Spacing.md,
   },
   providerBadge: {
-    backgroundColor: Colors.primaryBg,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(255, 255, 255, 0.20)',
     paddingHorizontal: Spacing.sm,
     paddingVertical: 3,
     borderRadius: Radius.sm,
+    marginBottom: Spacing.xs,
   },
   providerText: {
     fontSize: 10,
     fontWeight: '700',
-    color: Colors.primary,
-    letterSpacing: 0.3,
+    color: '#FFFFFF',
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
   },
-  title: {
-    fontSize: FontSizes.xl,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    lineHeight: 26,
-    marginBottom: Spacing.sm,
+  heroTitle: {
+    fontSize: FontSizes.xxl,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+    lineHeight: 28,
+    flexShrink: 1,
   },
-  metaRow: {
+  matchRing: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255, 255, 255, 0.24)',
+  },
+  matchValue: {
+    fontSize: FontSizes.lg,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  matchPercent: {
+    fontSize: 9,
+    color: 'rgba(255, 255, 255, 0.80)',
+    marginTop: -2,
+  },
+  heroMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: Spacing.xs,
+    gap: Spacing.md,
+    marginTop: Spacing.sm,
+    flexWrap: 'wrap',
   },
-  metaText: {
+  heroMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  heroMetaText: {
     fontSize: FontSizes.sm,
-    color: Colors.textSecondary,
-    flex: 1,
+    color: 'rgba(255, 255, 255, 0.92)',
   },
   remotePill: {
-    backgroundColor: 'rgba(8, 122, 85, 0.12)',
+    backgroundColor: 'rgba(16, 185, 129, 0.20)',
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
     borderRadius: Radius.sm,
@@ -268,68 +261,23 @@ const styles = StyleSheet.create({
   remotePillText: {
     fontSize: 10,
     fontWeight: '600',
-    color: Colors.success,
+    color: '#10B981',
   },
-  tagRow: {
+  tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: Spacing.md,
-  },
-  salaryTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: 'rgba(8, 122, 85, 0.10)',
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  salaryText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.success,
-  },
-  expTag: {
-    backgroundColor: Colors.primaryBg,
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  expText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Colors.primary,
-    textTransform: 'capitalize',
-  },
-  postedTag: {
-    paddingHorizontal: Spacing.sm + 2,
-    paddingVertical: 3,
-  },
-  postedText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-  },
-  matchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: Spacing.md,
-    paddingTop: Spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  matchText: {
-    fontSize: FontSizes.xs,
-    fontWeight: '600',
-    color: Colors.primary,
+    gap: Spacing.xs + 2,
+    paddingHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
   },
   sectionCard: {
+    marginHorizontal: Spacing.md,
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
+    ...Shadows.small,
   },
   sectionTitle: {
     fontSize: FontSizes.sm,
@@ -342,7 +290,6 @@ const styles = StyleSheet.create({
     fontSize: FontSizes.sm,
     color: Colors.textSecondary,
     lineHeight: 22,
-    whiteSpace: 'pre-wrap',
   },
   applyBar: {
     position: 'absolute',
@@ -384,10 +331,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderRadius: Radius.md,
     backgroundColor: Colors.primary,
+    ...Shadows.primary,
   },
   applyButtonText: {
     fontSize: FontSizes.md,
     fontWeight: '600',
-    color: '#fff',
+    color: '#FFFFFF',
   },
 });

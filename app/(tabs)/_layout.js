@@ -1,10 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-// SDK-57 recommended direct path — avoids the deprecated getter chain.
 import { Tabs as NativeTabs } from 'expo-router/js-tabs';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import useInterviewStore from '../../store/interviewStore';
 import { getCurrentUser } from '../../services/authService';
 
@@ -18,27 +17,18 @@ export default function TabLayout() {
 
   useEffect(() => {
     isMounted.current = true;
-
     const initialize = async () => {
       try {
         await Promise.resolve(initializeApp(getCurrentUser()?.uid));
       } catch (error) {
-        // Don't let a failed store init kill the entire tab navigator —
-        // the user can still navigate to other tabs.
         console.error('Interview store initialization failed:', error);
       }
     };
-
     initialize();
-
-    return () => {
-      isMounted.current = false;
-    };
+    return () => { isMounted.current = false; };
   }, [initializeApp]);
 
-  if (!Tabs) {
-    return <FallbackTabLayout />;
-  }
+  if (!Tabs) return <FallbackTabLayout />;
 
   return (
     <Tabs
@@ -49,14 +39,17 @@ export default function TabLayout() {
           borderTopWidth: 1,
           paddingTop: Spacing.sm,
           paddingBottom: Spacing.sm,
-          height: Platform.OS === 'ios' ? 84 : 64,
+          height: Platform.OS === 'ios' ? 88 : 68,
+          ...Shadows.small,
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: FontSizes.xs,
           fontWeight: '600',
+          marginTop: 2,
         },
+        tabBarIconStyle: { marginTop: 0 },
         headerStyle: { backgroundColor: Colors.bgPrimary },
         headerTintColor: Colors.textPrimary,
         headerTitleStyle: { fontWeight: '700' },
@@ -68,7 +61,6 @@ export default function TabLayout() {
         options={{
           title: 'Home',
           headerShown: false,
-          tabBarStyle: { display: 'none' },
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
           ),
@@ -76,25 +68,31 @@ export default function TabLayout() {
       />
 
       <Tabs.Screen
-        name="practice"
+        name="tools"
         options={{
-          title: 'Practice',
+          title: 'Tools',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'chatbubble' : 'chatbubble-outline'}
-              size={size}
-              color={color}
-            />
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
           ),
         }}
       />
 
       <Tabs.Screen
-        name="questions"
+        name="progress"
         options={{
-          title: 'Questions',
+          title: 'Progress',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'list' : 'list-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'trending-up' : 'trending-up-outline'} size={size} color={color} />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: 'Profile',
+          tabBarIcon: ({ color, size, focused }) => (
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
           ),
         }}
       />
@@ -104,21 +102,7 @@ export default function TabLayout() {
         options={{
           title: 'Jobs',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons
-              name={focused ? 'briefcase' : 'briefcase-outline'}
-              size={size}
-              color={color}
-            />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="history"
-        options={{
-          title: 'History',
-          tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'time' : 'time-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'briefcase' : 'briefcase-outline'} size={size} color={color} />
           ),
         }}
       />
@@ -129,10 +113,10 @@ export default function TabLayout() {
 function FallbackTabLayout() {
   const fallbackScreens = [
     { name: 'index', title: 'Home', icon: 'home-outline' },
-    { name: 'practice', title: 'Practice', icon: 'chatbubble-outline' },
-    { name: 'questions', title: 'Questions', icon: 'list-outline' },
+    { name: 'tools', title: 'Tools', icon: 'grid-outline' },
+    { name: 'progress', title: 'Progress', icon: 'trending-up-outline' },
+    { name: 'profile', title: 'Profile', icon: 'person-outline' },
     { name: 'jobs', title: 'Jobs', icon: 'briefcase-outline' },
-    { name: 'history', title: 'History', icon: 'time-outline' },
   ];
 
   return (
@@ -164,27 +148,27 @@ const fallbackStyles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: Spacing.l,
+    paddingHorizontal: Spacing.lg,
   },
   title: {
-    fontSize: 18,
+    fontSize: FontSizes.lg,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginBottom: Spacing.s,
+    marginBottom: Spacing.sm,
   },
   body: {
-    fontSize: 14,
+    fontSize: FontSizes.sm,
     color: Colors.textMuted,
     textAlign: 'center',
     lineHeight: 20,
   },
   tabBar: {
     flexDirection: 'row',
-    height: 60,
+    height: 68,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     backgroundColor: Colors.bgCard,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { fontSize: 11, marginTop: 2, color: Colors.textMuted },
+  tabLabel: { fontSize: FontSizes.xs, marginTop: 2, color: Colors.textMuted },
 });

@@ -1,179 +1,147 @@
 import React from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  StyleSheet,
-  Text,
-} from 'react-native';
-import {
-  Colors,
-  FontSizes,
-  MIN_TOUCH_TARGET,
-  Radius,
-  Shadows,
-  Spacing,
-} from '../../constants/theme';
+import { Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
-const SIZE_STYLES = {
-  small: {
-    minHeight: MIN_TOUCH_TARGET,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    fontSize: FontSizes.sm,
-  },
-  medium: {
-    minHeight: 50,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    fontSize: FontSizes.md,
-  },
-  large: {
-    minHeight: 56,
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    fontSize: FontSizes.md,
-  },
-};
+import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 
-const getVariantStyle = (variant, disabled) => {
-  if (disabled) {
-    return {
-      container: {
-        backgroundColor: Colors.bgElevated,
-        borderColor: Colors.border,
-        borderWidth: 1,
-      },
-      text: Colors.textMuted,
-      loader: Colors.textMuted,
-    };
-  }
-
-  switch (variant) {
-    case 'secondary':
-      return {
-        container: {
-          backgroundColor: Colors.secondary,
-          borderColor: Colors.secondary,
-          borderWidth: 1,
-        },
-        text: Colors.textPrimary,
-        loader: Colors.textPrimary,
-      };
-    case 'outline':
-      return {
-        container: {
-          backgroundColor: 'transparent',
-          borderColor: Colors.borderLight,
-          borderWidth: 1,
-        },
-        text: Colors.textPrimary,
-        loader: Colors.primary,
-      };
-    case 'ghost':
-      return {
-        container: {
-          backgroundColor: 'transparent',
-          borderColor: 'transparent',
-          borderWidth: 1,
-        },
-        text: Colors.primaryLight || Colors.primary,
-        loader: Colors.primary,
-      };
-    case 'primary':
-    default:
-      return {
-        container: {
-          backgroundColor: Colors.primary,
-          borderColor: Colors.primary,
-          borderWidth: 1,
-        },
-        text: Colors.textPrimary,
-        loader: Colors.textPrimary,
-      };
-  }
-};
-
-const Button = ({
-  title,
+/**
+ * Button
+ *
+ * Variants:
+ *   - primary   : brand gradient (4F46E5 → 7C3AED), white text, primary shadow
+ *   - secondary : white background, indigo border + text
+ *   - ghost     : transparent background, indigo text only
+ *   - dark      : dark panel color, used inside StatCard
+ *
+ * Sizes:
+ *   - sm        : compact (used inside dense rows like Job Detail apply bar)
+ *   - md        : default
+ *   - lg        : hero CTA on Home
+ *
+ * Props:
+ *   label, onPress, icon (Ionicons name), loading, disabled, fullWidth
+ */
+export default function Button({
+  label,
   onPress,
   variant = 'primary',
-  size = 'medium',
-  disabled = false,
-  loading = false,
+  size = 'md',
   icon,
+  iconPosition = 'left',
+  loading = false,
+  disabled = false,
   fullWidth = false,
   style,
-  textStyle,
-  accessibilityLabel,
-  accessibilityHint,
-}) => {
+}) {
   const isDisabled = disabled || loading;
-  const sizeStyle = SIZE_STYLES[size] || SIZE_STYLES.medium;
-  const variantStyle = getVariantStyle(variant, disabled);
 
   return (
-    <Pressable
+    <TouchableOpacity
       onPress={onPress}
       disabled={isDisabled}
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel || title}
-      accessibilityHint={accessibilityHint}
-      accessibilityState={{ disabled: isDisabled, busy: loading }}
-      hitSlop={size === 'small' ? 8 : undefined}
-      style={({ pressed }) => [
-        styles.button,
-        variantStyle.container,
-        {
-          minHeight: sizeStyle.minHeight,
-          paddingHorizontal: sizeStyle.paddingHorizontal,
-          paddingVertical: sizeStyle.paddingVertical,
-        },
+      activeOpacity={0.85}
+      style={[
+        styles.base,
+        sizeStyles[size],
+        variantStyles[variant],
         fullWidth && styles.fullWidth,
-        variant === 'primary' && !isDisabled && Shadows.primary,
-        pressed && !isDisabled && styles.pressed,
+        isDisabled && styles.disabled,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variantStyle.loader} size="small" />
+        <ActivityIndicator size="small" color={getIconColor(variant)} />
       ) : (
         <>
-          {icon}
-          <Text
-            numberOfLines={1}
-            style={[
-              styles.text,
-              { color: variantStyle.text, fontSize: sizeStyle.fontSize },
-              textStyle,
-            ]}
-          >
-            {title}
+          {icon && iconPosition === 'left' ? (
+            <Ionicons name={icon} size={getIconSize(size)} color={getIconColor(variant)} style={{ marginRight: 6 }} />
+          ) : null}
+          <Text style={[styles.label, { color: getTextColor(variant), fontSize: getFontSize(size) }]}>
+            {label}
           </Text>
+          {icon && iconPosition === 'right' ? (
+            <Ionicons name={icon} size={getIconSize(size)} color={getIconColor(variant)} style={{ marginLeft: 6 }} />
+          ) : null}
         </>
       )}
-    </Pressable>
+    </TouchableOpacity>
   );
-};
+}
+
+function getTextColor(variant) {
+  return {
+    primary: '#FFFFFF',
+    secondary: Colors.primary,
+    ghost: Colors.primary,
+    dark: '#FFFFFF',
+  }[variant] || Colors.textPrimary;
+}
+
+function getIconColor(variant) {
+  return getTextColor(variant);
+}
+
+function getFontSize(size) {
+  return { sm: FontSizes.sm, md: FontSizes.md, lg: FontSizes.lg }[size] || FontSizes.md;
+}
+
+function getIconSize(size) {
+  return { sm: 13, md: 16, lg: 18 }[size] || 16;
+}
+
+const sizeStyles = StyleSheet.create({
+  sm: {
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: Radius.md,
+  },
+  md: {
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: Radius.md,
+  },
+  lg: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: Radius.lg,
+  },
+});
+
+const variantStyles = StyleSheet.create({
+  primary: {
+    backgroundColor: Colors.gradientStart,
+    backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+    ...Shadows.primary,
+  },
+  secondary: {
+    backgroundColor: Colors.bgCard,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  ghost: {
+    backgroundColor: 'transparent',
+  },
+  dark: {
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.20)',
+  },
+});
 
 const styles = StyleSheet.create({
-  button: {
-    alignItems: 'center',
+  base: {
     flexDirection: 'row',
-    gap: Spacing.sm,
+    alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: Radius.lg,
+  },
+  label: {
+    fontWeight: '600',
+    letterSpacing: 0.2,
   },
   fullWidth: {
     width: '100%',
   },
-  pressed: {
-    opacity: 0.84,
-    transform: [{ scale: 0.985 }],
-  },
-  text: {
-    fontWeight: '700',
-    letterSpacing: 0.1,
+  disabled: {
+    opacity: 0.5,
   },
 });
-
-export default Button;
