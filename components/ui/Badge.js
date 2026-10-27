@@ -33,7 +33,7 @@ export default function Badge({ label, variant = 'primary', icon, size = 'sm' })
 
   return (
     <View style={[styles.badge, { backgroundColor: vs.bg, paddingVertical: sizeStyles.paddingY }]}>
-      {icon ? (
+      {icon && typeof icon === 'string' ? (
         <Ionicons name={icon} size={sizeStyles.iconSize} color={vs.text} style={{ marginRight: 3 }} />
       ) : null}
       <Text style={[styles.text, { color: vs.text, fontSize: sizeStyles.fontSize }]}>

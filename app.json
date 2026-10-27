@@ -2,7 +2,7 @@
   "expo": {
     "name": "Hirely",
     "slug": "hirely",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "orientation": "portrait",
     "scheme": "hirely",
     "userInterfaceStyle": "light",
@@ -15,7 +15,9 @@
       "permissions": [
         "RECORD_AUDIO"
       ],
-      "package": "com.zeeshii_07.hirely"
+      "package": "com.zeeshii07.hirely",
+      "versionCode": 3,
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       "expo-router",
@@ -42,14 +44,25 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "minSdkVersion": 24,
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
           }
         }
       ],
       "expo-asset",
       "expo-sharing",
       "expo-status-bar",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Hirely to access your photos to set your profile picture.",
+          "cameraPermission": "Allow Hirely to access your camera to take a profile picture."
+        }
+      ]
     ],
     "extra": {
       "router": {},

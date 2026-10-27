@@ -33,23 +33,40 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
+        // IMPROVED (Sprint 3): Taller tab bar with bigger touch targets,
+        // bigger labels, and more padding so labels are clearly visible
+        // above the icons. Previously the labels were too small (11pt) and
+        // positioned too close to the icons, making them hard to see.
         tabBarStyle: {
           backgroundColor: Colors.bgCard,
           borderTopColor: Colors.border,
           borderTopWidth: 1,
-          paddingTop: Spacing.sm,
-          paddingBottom: Spacing.sm,
-          height: Platform.OS === 'ios' ? 88 : 68,
+          paddingTop: Spacing.sm + 2,
+          paddingBottom: Platform.OS === 'ios' ? Spacing.md : Spacing.sm + 4,
+          height: Platform.OS === 'ios' ? 92 : 76,
           ...Shadows.small,
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
+
+        // IMPROVED: bigger label font + more visible weight + better spacing
         tabBarLabelStyle: {
-          fontSize: FontSizes.xs,
-          fontWeight: '600',
-          marginTop: 2,
+          fontSize: FontSizes.sm - 1, // 12pt — readable
+          fontWeight: '700',
+          marginTop: 4,
+          letterSpacing: 0.2,
         },
-        tabBarIconStyle: { marginTop: 0 },
+
+        // IMPROVED: icon size 24 instead of default 22 for better tap target
+        tabBarIconStyle: {
+          marginTop: 0,
+          marginBottom: 0,
+        },
+        tabBarItemStyle: {
+          paddingVertical: 4,
+        },
+
+        // Hide the header on the tab level — each tab defines its own header
         headerStyle: { backgroundColor: Colors.bgPrimary },
         headerTintColor: Colors.textPrimary,
         headerTitleStyle: { fontWeight: '700' },
@@ -62,7 +79,7 @@ export default function TabLayout() {
           title: 'Home',
           headerShown: false,
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'home' : 'home-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'home' : 'home-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -72,7 +89,7 @@ export default function TabLayout() {
         options={{
           title: 'Tools',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -82,7 +99,7 @@ export default function TabLayout() {
         options={{
           title: 'Progress',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'trending-up' : 'trending-up-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'trending-up' : 'trending-up-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -92,7 +109,7 @@ export default function TabLayout() {
         options={{
           title: 'Profile',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'person' : 'person-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'person' : 'person-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -102,7 +119,7 @@ export default function TabLayout() {
         options={{
           title: 'Jobs',
           tabBarIcon: ({ color, size, focused }) => (
-            <Ionicons name={focused ? 'briefcase' : 'briefcase-outline'} size={size} color={color} />
+            <Ionicons name={focused ? 'briefcase' : 'briefcase-outline'} size={24} color={color} />
           ),
         }}
       />
@@ -164,11 +181,11 @@ const fallbackStyles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
-    height: 68,
+    height: 76,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
     backgroundColor: Colors.bgCard,
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { fontSize: FontSizes.xs, marginTop: 2, color: Colors.textMuted },
+  tabLabel: { fontSize: 12, marginTop: 4, color: Colors.textMuted, fontWeight: '700' },
 });

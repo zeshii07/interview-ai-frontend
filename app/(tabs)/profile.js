@@ -1,18 +1,43 @@
 import React from 'react';
 import {
-  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
+  View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
-import { getCurrentUser, logoutUser } from '../../services/authService';
+import { getCurrentUser, logoutUser, onProfileChange } from '../../services/authService';
+import { subscribeProfilePhoto } from '../../services/profilePhotoService';
 import Button from '../../components/ui/Button';
 
 export default function ProfileScreen() {
-  const user = getCurrentUser();
+  // SPRINT 3.2: subscribe to profile changes (name) + photo (RTDB) so the
+  // Profile tab updates immediately when the user edits their profile on
+  // the Edit Profile screen.
+  const [user, setUser] = React.useState(getCurrentUser());
+  const [profilePhoto, setProfilePhoto] = React.useState(null);
+
+  React.useEffect(() => {
+    const unsubProfile = onProfileChange((u) => setUser(u));
+
+    // Subscribe to photo changes in RTDB. We pass the uid at subscription
+    // time; if the user logs out, the subscription returns no-op.
+    let unsubPhoto = () => {};
+    if (user?.uid) {
+      unsubPhoto = subscribeProfilePhoto(user.uid, (photo) => {
+        setProfilePhoto(photo);
+      });
+    }
+
+    return () => {
+      unsubProfile();
+      unsubPhoto();
+    };
+  }, [user?.uid]);
+
   const displayName = user?.displayName || 'User';
   const email = user?.email || '';
+  const photoURL = profilePhoto; // from RTDB, not Firebase Auth
   const initial = displayName.charAt(0).toUpperCase();
 
   const handleLogout = async () => {
@@ -32,7 +57,7 @@ export default function ProfileScreen() {
   };
 
   const menuItems = [
-    { icon: 'person-outline', label: 'Edit profile', route: '/settings/index' },
+    { icon: 'person-outline', label: 'Edit profile', route: '/settings/edit-profile' },
     { icon: 'document-text-outline', label: 'Resume management', route: '/resume/generator' },
     { icon: 'notifications-outline', label: 'Notifications', route: '/settings/index', badge: 'Coming soon' },
     { icon: 'moon-outline', label: 'Dark mode', route: '/settings/index', badge: 'Coming soon' },
@@ -54,7 +79,11 @@ export default function ProfileScreen() {
       {/* User card */}
       <View style={styles.userCard}>
         <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initial}</Text>
+          {photoURL ? (
+            <Image source={{ uri: photoURL }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initial}</Text>
+          )}
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.userName}>{displayName}</Text>
@@ -62,7 +91,7 @@ export default function ProfileScreen() {
         </View>
         <TouchableOpacity
           style={styles.editButton}
-          onPress={() => router.push('/settings/index')}
+          onPress={() => router.push('/settings/edit-profile')}
           activeOpacity={0.7}
         >
           <Ionicons name="create-outline" size={16} color={Colors.primary} />
@@ -170,6 +199,12 @@ const styles = StyleSheet.create({
     backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 28,
   },
   avatarText: {
     fontSize: FontSizes.xl,

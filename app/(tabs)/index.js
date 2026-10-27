@@ -366,10 +366,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    // SPRINT 3.2 FIX: removed `alignItems: 'stretch'` (was breaking 2-column
+    // layout — see app/(tabs)/tools.js for the full explanation).
+    justifyContent: 'space-between',
+    rowGap: Spacing.sm,
   },
   toolCardWrap: {
-    width: '48.5%',
+    // SPRINT 3.2 FIX: use flexBasis for reliable 2-column layout.
+    flexBasis: '48%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
   // 2-column layout — each card takes ~half width minus gap
   // We render ToolCards with explicit width via flexBasis

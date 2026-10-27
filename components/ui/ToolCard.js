@@ -92,7 +92,12 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
     padding: Spacing.md,
-    minHeight: 132,
+    // SPRINT 3.1 FIX: use fixed height instead of minHeight so all cards
+    // in the Tools grid are uniform regardless of description length.
+    // Cards were previously growing inconsistently — some short, some tall
+    // depending on the description text length. Fixed height + numberOfLines
+    // on the description forces a consistent grid.
+    height: 148,
     justifyContent: 'flex-start',
     borderWidth: 1,
     borderColor: Colors.border,

@@ -53,13 +53,13 @@ export default function Button({
         <ActivityIndicator size="small" color={getIconColor(variant)} />
       ) : (
         <>
-          {icon && iconPosition === 'left' ? (
+          {icon && iconPosition === 'left' && typeof icon === 'string' ? (
             <Ionicons name={icon} size={getIconSize(size)} color={getIconColor(variant)} style={{ marginRight: 6 }} />
           ) : null}
           <Text style={[styles.label, { color: getTextColor(variant), fontSize: getFontSize(size) }]}>
             {label}
           </Text>
-          {icon && iconPosition === 'right' ? (
+          {icon && iconPosition === 'right' && typeof icon === 'string' ? (
             <Ionicons name={icon} size={getIconSize(size)} color={getIconColor(variant)} style={{ marginLeft: 6 }} />
           ) : null}
         </>

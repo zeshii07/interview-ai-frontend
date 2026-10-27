@@ -36,11 +36,13 @@ export default function SelectCard({
       ]}
     >
       <View style={[styles.iconWrap, selected && styles.iconWrapSelected]}>
-        <Ionicons
-          name={icon}
-          size={20}
-          color={selected ? '#FFFFFF' : Colors.primary}
-        />
+        {icon && typeof icon === 'string' ? (
+          <Ionicons
+            name={icon}
+            size={20}
+            color={selected ? '#FFFFFF' : Colors.primary}
+          />
+        ) : null}
       </View>
 
       <View style={{ flex: 1 }}>

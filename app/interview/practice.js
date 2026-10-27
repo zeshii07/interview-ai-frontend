@@ -248,8 +248,14 @@ export default function PracticeScreen() {
       </View>
 
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        // SPRINT 3.1 FIX: keyboard avoidance for the chat-input bar.
+        // On iOS use 'padding' (the standard).
+        // On Android use 'height' (the standard for chat-style inputs).
+        // The previous code used `undefined` on Android which means the
+        // chat-input bar got covered by the keyboard.
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={{ flex: 1 }}
+        enabled
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
@@ -281,52 +287,87 @@ export default function PracticeScreen() {
                 <Text style={styles.hintToggle}>{showHint ? 'Hide hint' : 'Show hint'}</Text>
               </TouchableOpacity>
             </View>
-            <TextInput
-              style={styles.answerInput}
-              placeholder="Type your answer or use voice…"
-              placeholderTextColor={Colors.textMuted}
-              value={answer}
-              onChangeText={setAnswer}
-              multiline
-              textAlignVertical="top"
-            />
+            {/* OLD: separate TextInput + footer with voice button + submit button.
+                NEW: chat-input style — single combined input bar with mic + send
+                inside it, like WhatsApp/Telegram/ChatGPT mobile. */}
           </View>
 
           <View style={{ height: 100 }} />
         </ScrollView>
 
-        <View style={styles.footer}>
-          <View style={styles.footerRow}>
-            <TouchableOpacity
-              style={[
-                styles.voiceButton,
-                (isListening || isTranscribing) && styles.voiceButtonActive,
-                !hasPermission && styles.voiceButtonDisabled,
-              ]}
-              onPress={handleVoicePress}
-              disabled={!hasPermission || isTranscribing}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={isListening ? 'stop' : 'mic-outline'}
-                size={20}
-                color={isListening ? '#FFFFFF' : Colors.primary}
-              />
-              <Text style={[styles.voiceLabel, isListening && styles.voiceLabelActive]}>
-                {isTranscribing ? 'Transcribing…' : isListening ? 'Listening' : 'Voice'}
-              </Text>
-            </TouchableOpacity>
-
-            <Button
-              label={store.isEvaluating ? 'Evaluating…' : 'Submit answer'}
-              icon={store.isEvaluating ? undefined : 'checkmark-outline'}
-              iconPosition="left"
-              size="lg"
-              disabled={!answer.trim() || store.isEvaluating}
-              onPress={handleSubmit}
-              style={{ flex: 1 }}
+        {/* Chat-input bar — mic and send button INSIDE the text input,
+            like modern chat apps. When the input is empty, mic shows
+            (tap to record). When the input has text, send shows (tap to
+            submit). While transcribing, show a spinner. */}
+        <View style={styles.chatInputBar}>
+          <View style={styles.chatInputWrap}>
+            <TextInput
+              style={styles.chatInput}
+              placeholder={isListening ? 'Listening…' : isTranscribing ? 'Transcribing…' : 'Type your answer or tap mic to speak'}
+              placeholderTextColor={Colors.textMuted}
+              value={answer}
+              onChangeText={setAnswer}
+              multiline
+              maxLength={2000}
+              editable={!isTranscribing && !store.isEvaluating}
+              textAlignVertical="top"
             />
+
+            {/* Right-side action button — mic OR send OR spinner,
+                depending on state. This is the modern chat pattern. */}
+            {isTranscribing ? (
+              <View style={[styles.chatActionButton, styles.chatActionBusy]}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+              </View>
+            ) : answer.trim() ? (
+              <TouchableOpacity
+                style={[styles.chatActionButton, styles.chatActionSend]}
+                onPress={handleSubmit}
+                disabled={store.isEvaluating}
+                activeOpacity={0.8}
+                accessibilityLabel="Submit answer"
+                accessibilityRole="button"
+              >
+                {store.isEvaluating ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Ionicons name="arrow-up" size={20} color="#FFFFFF" />
+                )}
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.chatActionButton,
+                  isListening ? styles.chatActionActive : styles.chatActionMic,
+                  !hasPermission && styles.chatActionDisabled,
+                ]}
+                onPress={handleVoicePress}
+                disabled={!hasPermission || store.isEvaluating}
+                activeOpacity={0.8}
+                accessibilityLabel={isListening ? 'Stop recording' : 'Start voice input'}
+                accessibilityRole="button"
+              >
+                <Ionicons
+                  name={isListening ? 'stop' : 'mic'}
+                  size={20}
+                  color={isListening ? '#FFFFFF' : Colors.primary}
+                />
+              </TouchableOpacity>
+            )}
           </View>
+
+          {/* Hint text below input bar */}
+          <Text style={styles.chatInputHint}>
+            {isListening
+              ? 'Tap stop when done, or just keep talking — we\'ll transcribe'
+              : isTranscribing
+              ? 'Transcribing your audio…'
+              : answer.trim()
+              ? `${answer.trim().length} chars — tap arrow to submit`
+              : hasPermission
+              ? 'Tap mic to record your answer'
+              : 'Microphone permission needed — enable in Settings'}
+          </Text>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -530,45 +571,70 @@ const styles = StyleSheet.create({
     minHeight: 140,
     lineHeight: 22,
   },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+
+  // ─── NEW chat-input styles (Sprint 3) ──────────────────────────────────
+  // Combined input bar — text input on the left, action button (mic/send)
+  // on the right, INSIDE the same rounded container. Like WhatsApp/Telegram.
+  chatInputBar: {
     paddingHorizontal: Spacing.md,
     paddingTop: Spacing.sm,
     paddingBottom: Spacing.lg,
-    backgroundColor: Colors.bgPrimary,
+    backgroundColor: Colors.bgCard,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
   },
-  footerRow: {
+  chatInputWrap: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: Spacing.sm,
+    backgroundColor: Colors.bgPrimary,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: Spacing.xs + 2,
+    minHeight: 52,
   },
-  voiceButton: {
-    width: 56,
-    height: 56,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.primaryBg,
+  chatInput: {
+    flex: 1,
+    fontSize: FontSizes.md,
+    color: Colors.textPrimary,
+    padding: 0,
+    margin: 0,
+    minHeight: 28,
+    maxHeight: 140,
+    lineHeight: 22,
+  },
+  chatActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 2,
   },
-  voiceButtonActive: {
+  chatActionMic: {
+    backgroundColor: Colors.primaryBg,
+  },
+  chatActionActive: {
     backgroundColor: Colors.error,
+    ...Shadows.small,
   },
-  voiceButtonDisabled: {
+  chatActionSend: {
+    backgroundColor: Colors.primary,
+    ...Shadows.primary,
+  },
+  chatActionBusy: {
+    backgroundColor: Colors.primaryBg,
+  },
+  chatActionDisabled: {
     opacity: 0.4,
   },
-  voiceLabel: {
-    fontSize: 9,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  voiceLabelActive: {
-    color: '#FFFFFF',
+  chatInputHint: {
+    fontSize: FontSizes.xs,
+    color: Colors.textMuted,
+    marginTop: Spacing.xs + 2,
+    marginLeft: Spacing.sm,
+    textAlign: 'center',
   },
 
   // Feedback view

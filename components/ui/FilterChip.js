@@ -38,7 +38,7 @@ export default function FilterChip({
           : { backgroundColor: Colors.bgCard, borderColor: Colors.border },
       ]}
     >
-      {selected && icon ? (
+      {selected && icon && typeof icon === 'string' ? (
         <Ionicons name={icon} size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
       ) : null}
       <Text

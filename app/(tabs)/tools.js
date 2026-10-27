@@ -191,9 +191,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    // SPRINT 3.2 FIX: removed `alignItems: 'stretch'` because on React Native,
+    // `alignItems: 'stretch'` on a `flexWrap: 'wrap'` container OVERRIDES
+    // the explicit width on children, stretching each card to full row width.
+    // That's why cards were stacking vertically (1 column) instead of
+    // sitting side-by-side (2 columns).
+    // The fix: rely on the explicit `flexBasis: '48%'` set on each card
+    // wrapper + `justifyContent: 'space-between'` to distribute them.
+    justifyContent: 'space-between',
+    rowGap: Spacing.sm,
   },
   toolCardWrap: {
-    width: '48.5%',
+    // SPRINT 3.2 FIX: use flexBasis instead of width % for reliable 2-column
+    // layout. flexBasis works with flexWrap: 'wrap' to ensure exactly 2
+    // cards per row on every screen size.
+    flexBasis: '48%',
+    flexGrow: 0,
+    flexShrink: 0,
   },
 });
