@@ -9,7 +9,7 @@ import { PRIVACY_SECTIONS, TERMS_SECTIONS } from '../../components/legal-content
 import { loadPreferences, savePreferences } from '../../utils/storage';
 import { Colors, Gradients } from '../../constants/theme';
 
-const PURPLE = '#6541F5';
+const PURPLE = Colors.primary;
 const INK = Colors.textPrimary;
 const MUTED = Colors.textSecondary;
 const BORDER = Colors.border;
@@ -74,7 +74,7 @@ export default function LoginScreen() {
 
   const field = ({ id, icon, placeholder, value, onChangeText, secure, eye, passwordVisible, onTogglePassword, ...props }) => (
     <View style={[styles.inputShell, focused === id && styles.inputFocused]}>
-      <Ionicons name={icon} size={25} color="#73778D" />
+      <Ionicons name={icon} size={25} color={Colors.textMuted} />
       <TextInput
         style={styles.input}
         placeholder={placeholder}
@@ -89,7 +89,7 @@ export default function LoginScreen() {
         autoCorrect={false}
         {...props}
       />
-      {eye && <Pressable onPress={onTogglePassword} hitSlop={12} style={styles.eye} accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}><Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={26} color="#73778D" /></Pressable>}
+      {eye && <Pressable onPress={onTogglePassword} hitSlop={12} style={styles.eye} accessibilityLabel={passwordVisible ? 'Hide password' : 'Show password'}><Ionicons name={passwordVisible ? 'eye-off-outline' : 'eye-outline'} size={26} color={Colors.textMuted} /></Pressable>}
     </View>
   );
 

@@ -14,6 +14,8 @@ import {
   rgb,
 } from 'pdf-lib';
 
+import { bytesToBase64 } from '../utils/bytes';
+
 // ---------- helpers ----------
 
 function hexToColor(hex) {
@@ -35,10 +37,97 @@ function hexToColor(hex) {
   return rgb(r, g, b);
 }
 
+// ---------- WinAnsi sanitizer ----------
+//
+// pdf-lib's StandardFonts (Helvetica) only support the WinAnsi (CP-1252)
+// character set. Any character outside it throws
+//   "WinAnsi cannot encode ..." (0xXXXX)
+// which crashes the PDF download. The fix has two layers:
+//   1. safeText() sanitizes every string at the source (all resume text flows
+//      through it via wrapText/fitText/direct calls).
+//   2. ResumeCanvas.drawText() sanitizes again right before page.drawText()
+//      as a last line of defense for callers that bypass safeText().
+
+const WINANSI_REPLACEMENTS = [
+  // Dashes / quotes
+  [/[\u2018\u2019\u201A\u201B\u2032]/g, "'"],
+  [/[\u201C\u201D\u201E\u201F\u2033]/g, '"'],
+  [/[\u2013]/g, '-'],           // en dash
+  [/[\u2012\u2014\u2015]/g, '--'], // figure/em dashes
+  [/\u2026/g, '...'],           // ellipsis
+  // Bullets
+  [/\u2022/g, '*'],
+  [/\u25CF|\u25AA|\u25A0|\u2023|\u25E6/g, '*'],
+  // Arrows / math
+  [/[\u2190\u2191\u2193]/g, ''],
+  [/\u2192|\u21D2/g, '->'],
+  [/\u2190|\u21D0/g, '<-'],
+  [/\u2194/g, '<->'],
+  [/\u00D7|\u2715|\u2716/g, 'x'],
+  [/\u00F7/g, '/'],
+  [/\u2264/g, '<='],
+  [/\u2265/g, '>='],
+  [/\u2260/g, '!='],
+  [/\u2248/g, '~'],
+  [/\u00B1/g, '+/-'],
+  [/\u221E/g, 'inf'],
+  [/\u00B0/g, 'deg'],
+  // Currency
+  [/\u20AC/g, 'EUR'],
+  [/\u20B9/g, 'Rs'],
+  [/\u00A3/g, 'GBP'],
+  [/\u00A5/g, 'JPY'],
+  // Symbols
+  [/\u2122/g, '(TM)'],
+  [/\u00A9/g, '(c)'],
+  [/\u00AE/g, '(r)'],
+  [/\u00A7/g, 'S'],
+  [/\u00B6/g, 'P'],
+  [/\u2020/g, '+'],
+  [/\u2021/g, '++'],
+  [/\u2030/g, '%%'],
+  // Fractions
+  [/\u00BD/g, '1/2'],
+  [/\u00BC/g, '1/4'],
+  [/\u00BE/g, '3/4'],
+  [/\u2153/g, '1/3'],
+  [/\u2154/g, '2/3'],
+  // Spaces
+  [/[\u00A0\u2007\u202F\u2009\u200A\u200B\u200C\u200D\uFEFF]/g, ' '],
+];
+
+// Emoji, dingbats, symbols, variation selectors and zero-width joiners —
+// none of these exist in WinAnsi.
+const EMOJI_RE = /[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F1E6}-\u{1F1FF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{2300}-\u{23FF}]/gu;
+
+// Everything WinAnsi can encode: ASCII, Latin-1 supplement, and the CP-1252
+// specials (smart punctuation, œ/Š/ž/Ÿ/ƒ/€/™...).
+const WINANSI_OK = /[\u0020-\u007E\u00A0-\u00FF\u0152\u0153\u0160\u0161\u0178\u017D\u017E\u0192\u2013\u2014\u2018\u2019\u201A\u201C\u201D\u201E\u2020\u2021\u2022\u2026\u2030\u2039\u203A\u20AC\u2122]/;
+
+function sanitizeForWinAnsi(value) {
+  if (value === null || value === undefined) return '';
+  let text = String(value);
+
+  for (const [pattern, replacement] of WINANSI_REPLACEMENTS) {
+    text = text.replace(pattern, replacement);
+  }
+  text = text.replace(EMOJI_RE, '');
+
+  // Strip any remaining characters WinAnsi cannot encode (CJK, Arabic,
+  // Cyrillic, Devanagari, box drawing, ...).
+  let out = '';
+  for (const char of text) {
+    if (char === '\n' || char === '\t' || WINANSI_OK.test(char)) {
+      out += char;
+    }
+  }
+  return out;
+}
+
 function safeText(value, fallback = '') {
-  if (typeof value === 'string') return value.trim() || fallback;
+  if (typeof value === 'string') return sanitizeForWinAnsi(value.trim()) || fallback;
   if (typeof value === 'number') return String(value);
-  return fallback;
+  return sanitizeForWinAnsi(fallback);
 }
 
 function safeArray(value) {
@@ -113,90 +202,10 @@ function fitText(text, font, fontSize, maxWidth) {
 }
 
 // ---------- templates ----------
-
-const COLOR_PALETTE = {
-  ink: '#292929',
-  body: '#414141',
-  muted: '#727272',
-  blue: '#3567F0',
-  chip: '#EEF3FF',
-  rule: '#292929',
-  lightRule: '#C8C8C8',
-};
-
-const TEMPLATES = {
-  'ats-classic': {
-    ...COLOR_PALETTE,
-    id: 'ats-classic',
-    headingStyle: 'classic',
-    headerStyle: 'left',
-  },
-  'corporate-professional': {
-    ...COLOR_PALETTE,
-    id: 'corporate-professional',
-    ink: '#182433',
-    body: '#263442',
-    muted: '#617080',
-    blue: '#17365D',
-    chip: '#EAF0F7',
-    rule: '#17365D',
-    lightRule: '#B7C4D0',
-    headingStyle: 'band',
-    headerStyle: 'center',
-  },
-  'european-standard': {
-    ...COLOR_PALETTE,
-    id: 'european-standard',
-    ink: '#18354A',
-    body: '#304A5D',
-    muted: '#687F8E',
-    blue: '#005B96',
-    chip: '#E8F3F9',
-    rule: '#005B96',
-    lightRule: '#B5D1E1',
-    headingStyle: 'european',
-    headerStyle: 'european',
-  },
-  'technical-compact': {
-    ...COLOR_PALETTE,
-    id: 'technical-compact',
-    ink: '#193B38',
-    body: '#2E4946',
-    muted: '#687C79',
-    blue: '#0F766E',
-    chip: '#E5F4F1',
-    rule: '#0F766E',
-    lightRule: '#B5D8D3',
-    headingStyle: 'technical',
-    headerStyle: 'technical',
-  },
-  'eu-academic': {
-    ...COLOR_PALETTE,
-    id: 'eu-academic',
-    ink: '#1A2A4F',
-    body: '#2C3E50',
-    muted: '#7B8794',
-    blue: '#1A2A4F',
-    chip: '#E8EEF7',
-    rule: '#1A2A4F',
-    lightRule: '#C5CFDD',
-    headingStyle: 'academic',
-    headerStyle: 'academic',
-  },
-  'academic-photo': {
-    ...COLOR_PALETTE,
-    id: 'academic-photo',
-    ink: '#1A2A4F',
-    body: '#2C3E50',
-    muted: '#7B8794',
-    blue: '#1A2A4F',
-    chip: '#E8EEF7',
-    rule: '#1A2A4F',
-    lightRule: '#C5CFDD',
-    headingStyle: 'academic',
-    headerStyle: 'academic-photo',
-  },
-};
+// Theme tokens now live in constants/resumeTemplates.js (single source of
+// truth shared with the DOCX generator, the in-app preview, and the template
+// picker) so the downloaded document always matches what the user saw.
+import { RESUME_TEMPLATE_THEMES as TEMPLATES } from '../constants/resumeTemplates';
 
 function getTheme(templateId) {
   return TEMPLATES[templateId] && TEMPLATES[templateId].id
@@ -275,13 +284,16 @@ class ResumeCanvas {
       align = 'left',
     } = options;
 
+    // Safety net: sanitize right before drawing so a caller that bypassed
+    // safeText() can still never trigger "WinAnsi cannot encode".
+    const cleanValue = sanitizeForWinAnsi(value);
+    if (!cleanValue) return;
+
     const font = this.currentFont(bold);
     const colorRgb = typeof color === 'string' ? hexToColor(color) : color;
 
-    if (!value) return;
-
     if (maxWidth && align === 'left') {
-      const lines = wrapText(value, font, size, maxWidth);
+      const lines = wrapText(cleanValue, font, size, maxWidth);
       let cursorY = y;
       lines.forEach((line) => {
         if (cursorY + size + 3 > this.pageBottom()) {
@@ -302,11 +314,11 @@ class ResumeCanvas {
       this.ensureSpace(size + 3);
       let drawX = x;
       if (align === 'center') {
-        drawX = x + (maxWidth || this.contentWidth) / 2 - this.textWidth(value, size, bold) / 2;
+        drawX = x + (maxWidth || this.contentWidth) / 2 - this.textWidth(cleanValue, size, bold) / 2;
       } else if (align === 'right') {
-        drawX = x + (maxWidth || this.contentWidth) - this.textWidth(value, size, bold);
+        drawX = x + (maxWidth || this.contentWidth) - this.textWidth(cleanValue, size, bold);
       }
-      this.page.drawText(value, {
+      this.page.drawText(cleanValue, {
         x: drawX,
         y: this.toPdfY_text(y, size),
         size,
@@ -939,11 +951,24 @@ function addContactLine(canvas, resumeData) {
 
 // ---------- main entry ----------
 
-export async function buildResumePdfBytes(resumeData = {}) {
-  if (!resumeData || typeof resumeData !== 'object' || Array.isArray(resumeData)) {
-    throw new TypeError('Resume data must be an object.');
-  }
+// A4 in points — one constant so the downloaded PDF and the in-app
+// document preview always agree on page geometry.
+const PAGE_SIZE = [595.28, 841.89];
 
+/**
+ * Run the full resume layout against `doc`.
+ *
+ * `doc` is either a real pdf-lib PDFDocument (for the downloadable PDF) or
+ * a recording document (for the in-app template preview — see
+ * buildResumePdfLayout). Both expose the same small interface the render
+ * code needs: metadata setters, embedStandardFont / embedJpg / embedPng,
+ * addPage / getPage / getPages and a PDF context for link annotations.
+ *
+ * Everything below (header, sections, footer) is written once and drives
+ * BOTH outputs, so the preview matches the PDF line-for-line — same text
+ * wrapping (real Helvetica metrics), same page breaks, same positions.
+ */
+async function renderResumeDocument(doc, resumeData) {
   const firstName = safeText(resumeData.firstName, 'Candidate');
   const lastName = safeText(resumeData.lastName, 'User');
   const fullName = `${firstName} ${lastName}`.trim();
@@ -951,7 +976,6 @@ export async function buildResumePdfBytes(resumeData = {}) {
   const templateId = getTheme(resumeData.templateId).id;
   const theme = getTheme(templateId);
 
-  const doc = await PDFDocument.create();
   doc.setTitle(`${fullName} - Resume`);
   doc.setAuthor(fullName);
   doc.setSubject('Resume generated by Hirely (offline)');
@@ -964,7 +988,7 @@ export async function buildResumePdfBytes(resumeData = {}) {
   const bold = doc.embedStandardFont(StandardFonts.HelveticaBold);
 
   // Create first page explicitly so canvas has something to bind to.
-  doc.addPage([595.28, 841.89]); // A4 in points
+  doc.addPage(PAGE_SIZE); // A4 in points
 
   const canvas = new ResumeCanvas(doc, theme, { regular, bold });
 
@@ -1410,8 +1434,188 @@ export async function buildResumePdfBytes(resumeData = {}) {
       color: hexToColor('#999999'),
     });
   });
+}
 
-  return doc.save();
+function assertResumeData(resumeData) {
+  if (!resumeData || typeof resumeData !== 'object' || Array.isArray(resumeData)) {
+    throw new TypeError('Resume data must be an object.');
+  }
+}
+
+export async function buildResumePdfBytes(resumeData = {}) {
+  assertResumeData(resumeData);
+
+  const doc = await PDFDocument.create();
+  await renderResumeDocument(doc, resumeData);
+
+  // useObjectStreams: false — object-stream serialization (the pako flate
+  // path inside pdf-lib's save) is the most fragile part of pdf-lib on
+  // Hermes / React Native and has been linked to hard native crashes when
+  // the PDF button is tapped. A classic xref-table PDF is a few KB larger
+  // but far more compatible with every viewer.
+  return doc.save({ useObjectStreams: false });
+}
+
+// ---------- recording document (in-app template preview) ----------
+//
+// To show users EXACTLY how their downloaded PDF will look, the same
+// render code above is re-run against this recording document: every
+// page.drawText / drawLine / drawRectangle / drawCircle / drawImage call
+// is captured (in PDF coordinates) instead of written into a real PDF.
+// components/resume/PdfDocumentPreview.js then paints the recorded
+// operations as React Native views at A4 proportions.
+
+function pdfColorToHex(color) {
+  if (!color || typeof color !== 'object') return '#000000';
+  const part = (value) =>
+    Math.max(0, Math.min(255, Math.round((value ?? 0) * 255)))
+      .toString(16)
+      .padStart(2, '0');
+  return `#${part(color.red)}${part(color.green)}${part(color.blue)}`;
+}
+
+function isBoldFont(font) {
+  return Boolean(font && font.name && String(font.name).includes('Bold'));
+}
+
+function createRecordingPage(width, height) {
+  const page = {
+    width,
+    height,
+    ops: [],
+    node: { addAnnot: () => {} },
+    getWidth: () => page.width,
+    getHeight: () => page.height,
+    drawText(text, options = {}) {
+      const value = String(text ?? '');
+      if (!value) return;
+      page.ops.push({
+        type: 'text',
+        text: value,
+        x: options.x ?? 0,
+        y: options.y ?? 0,
+        size: options.size ?? 10,
+        bold: isBoldFont(options.font),
+        color: pdfColorToHex(options.color),
+      });
+    },
+    drawLine(options = {}) {
+      page.ops.push({
+        type: 'line',
+        x1: options.start?.x ?? 0,
+        y1: options.start?.y ?? 0,
+        x2: options.end?.x ?? 0,
+        y2: options.end?.y ?? 0,
+        thickness: options.thickness ?? 1,
+        color: pdfColorToHex(options.color),
+      });
+    },
+    drawRectangle(options = {}) {
+      page.ops.push({
+        type: 'rect',
+        x: options.x ?? 0,
+        y: options.y ?? 0,
+        width: options.width ?? 0,
+        height: options.height ?? 0,
+        color: options.color ? pdfColorToHex(options.color) : null,
+        borderColor: options.borderColor ? pdfColorToHex(options.borderColor) : null,
+        borderWidth: options.borderWidth ?? 0,
+      });
+    },
+    drawCircle(options = {}) {
+      page.ops.push({
+        type: 'circle',
+        cx: options.x ?? 0,
+        cy: options.y ?? 0,
+        r: options.size ?? 0,
+        color: options.color ? pdfColorToHex(options.color) : null,
+        borderColor: options.borderColor ? pdfColorToHex(options.borderColor) : null,
+        borderWidth: options.borderWidth ?? 0,
+      });
+    },
+    drawImage(image, options = {}) {
+      if (!image || !image.base64) return;
+      page.ops.push({
+        type: 'image',
+        x: options.x ?? 0,
+        y: options.y ?? 0,
+        width: options.width ?? 0,
+        height: options.height ?? 0,
+        base64: image.base64,
+        mime: image.mime || 'image/jpeg',
+      });
+    },
+  };
+  return page;
+}
+
+function createRecordingDoc(fonts) {
+  const pages = [];
+  return {
+    // The render code registers link annotations through the low-level
+    // context — the preview doesn't need them, so accept and ignore.
+    context: {
+      obj: () => ({}),
+      register: () => ({}),
+    },
+    setTitle: () => {},
+    setAuthor: () => {},
+    setSubject: () => {},
+    setCreator: () => {},
+    setProducer: () => {},
+    // Return the REAL pdf-lib fonts (from a throwaway metrics document) so
+    // widthOfTextAtSize uses true Helvetica metrics — the preview wraps and
+    // paginates exactly like the PDF.
+    embedStandardFont: (name) =>
+      name === StandardFonts.HelveticaBold ? fonts.bold : fonts.regular,
+    embedJpg: async (bytes) => ({
+      base64: bytesToBase64(bytes),
+      mime: 'image/jpeg',
+    }),
+    embedPng: async (bytes) => ({
+      base64: bytesToBase64(bytes),
+      mime: 'image/png',
+    }),
+    addPage: (size) => {
+      const page = createRecordingPage(
+        size?.[0] ?? PAGE_SIZE[0],
+        size?.[1] ?? PAGE_SIZE[1]
+      );
+      pages.push(page);
+      return page;
+    },
+    getPage: (index) => pages[index],
+    getPages: () => pages,
+    getResult: () => ({
+      pages: pages.map((page) => ({
+        width: page.width,
+        height: page.height,
+        ops: page.ops,
+      })),
+    }),
+  };
+}
+
+/**
+ * Build a full document LAYOUT description for the in-app preview — the
+ * exact draw operations the PDF generator would emit, page by page.
+ *
+ * Returns: { pages: [{ width, height, ops: [...] }] }
+ */
+export async function buildResumePdfLayout(resumeData = {}) {
+  assertResumeData(resumeData);
+
+  // Real pdf-lib fonts for true Helvetica metrics (pure AFM math — nothing
+  // is written to disk, no document is serialized).
+  const metricsDoc = await PDFDocument.create();
+  const fonts = {
+    regular: metricsDoc.embedStandardFont(StandardFonts.Helvetica),
+    bold: metricsDoc.embedStandardFont(StandardFonts.HelveticaBold),
+  };
+
+  const doc = createRecordingDoc(fonts);
+  await renderResumeDocument(doc, resumeData);
+  return doc.getResult();
 }
 
 export function buildResumeFilename(resumeData = {}) {
@@ -1426,5 +1630,6 @@ export function buildResumeFilename(resumeData = {}) {
 // Re-export for callers that only need one function
 export default {
   buildResumePdfBytes,
+  buildResumePdfLayout,
   buildResumeFilename,
 };

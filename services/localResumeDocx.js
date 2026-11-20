@@ -41,39 +41,10 @@ function safeArray(value) {
 }
 
 // ---------- templates ----------
-
-const TEMPLATE_THEMES = {
-  'ats-classic': {
-    ink: '#292929', body: '#414141', muted: '#727272', accent: '#3567F0', chipBg: '#EEF3FF', rule: '#292929',
-    headerAlign: 'left',
-    headingStyle: 'classic', // thin rule under heading
-  },
-  'corporate-professional': {
-    ink: '#182433', body: '#263442', muted: '#617080', accent: '#17365D', chipBg: '#EAF0F7', rule: '#17365D',
-    headerAlign: 'center',
-    headingStyle: 'band', // filled navy band
-  },
-  'european-standard': {
-    ink: '#18354A', body: '#304A5D', muted: '#687F8E', accent: '#005B96', chipBg: '#E8F3F9', rule: '#005B96',
-    headerAlign: 'left',
-    headingStyle: 'european', // thin blue rule
-  },
-  'technical-compact': {
-    ink: '#193B38', body: '#2E4946', muted: '#687C79', accent: '#0F766E', chipBg: '#E5F4F1', rule: '#0F766E',
-    headerAlign: 'left',
-    headingStyle: 'technical', // accent bar + chip background
-  },
-  'eu-academic': {
-    ink: '#1A2A4F', body: '#2C3E50', muted: '#7B8794', accent: '#1A2A4F', chipBg: '#E8EEF7', rule: '#1A2A4F',
-    headerAlign: 'center',
-    headingStyle: 'academic', // thin centered rule under heading text
-  },
-  'academic-photo': {
-    ink: '#1A2A4F', body: '#2C3E50', muted: '#7B8794', accent: '#1A2A4F', chipBg: '#E8EEF7', rule: '#1A2A4F',
-    headerAlign: 'left',
-    headingStyle: 'academic',
-  },
-};
+// Theme tokens now live in constants/resumeTemplates.js (single source of
+// truth shared with the PDF generator, the in-app preview, and the template
+// picker) so the downloaded document always matches what the user saw.
+import { RESUME_TEMPLATE_THEMES as TEMPLATE_THEMES } from '../constants/resumeTemplates';
 
 function getTheme(templateId) {
   return TEMPLATE_THEMES[templateId] && TEMPLATE_THEMES[templateId].accent

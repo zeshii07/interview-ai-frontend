@@ -26,49 +26,7 @@ import Badge from '../../components/ui/Badge';
 import JobCard from '../../components/jobs/JobCard';
 import SlowNetworkBanner from '../../components/ui/SlowNetworkBanner';
 import ErrorState from '../../components/ui/ErrorState';
-
-const PRIMARY_TOOLS = [
-  {
-    title: 'ATS Resume\nGenerator',
-    description: 'Generate a pro PDF resume',
-    icon: 'document-text-outline',
-    route: '/resume/generator',
-    featured: true,
-  },
-  {
-    title: 'Analyze Your\nResume',
-    description: 'Improve your resume',
-    icon: 'analytics-outline',
-    route: '/resume/analyze',
-  },
-  {
-    title: 'Question\nBank',
-    description: 'Practice key questions',
-    icon: 'help-circle-outline',
-    route: '/questions',
-  },
-  {
-    title: 'Interview\nHistory',
-    description: 'Review past sessions',
-    icon: 'time-outline',
-    route: '/(tabs)/progress',
-  },
-];
-
-const SECONDARY_TOOLS = [
-  {
-    title: 'AI Coach',
-    description: 'Personalized coaching',
-    icon: 'headset-outline',
-    comingSoon: true,
-  },
-  {
-    title: 'Mock Interview',
-    description: 'Full simulated interview',
-    icon: 'mic-outline',
-    comingSoon: true,
-  },
-];
+import { getHomePrimaryTools, getHomeComingSoonTools } from '../../constants/tools';
 
 export default function HomeScreen() {
   const user = getCurrentUser();
@@ -252,10 +210,10 @@ export default function HomeScreen() {
         />
 
         <View style={styles.toolsGrid}>
-          {PRIMARY_TOOLS.map((tool) => (
-            <View key={tool.title} style={styles.toolCardWrap}>
+          {getHomePrimaryTools().map((tool) => (
+            <View key={tool.id} style={styles.toolCardWrap}>
               <ToolCard
-                title={tool.title}
+                title={tool.shortTitle}
                 description={tool.description}
                 icon={tool.icon}
                 featured={tool.featured}
@@ -267,10 +225,10 @@ export default function HomeScreen() {
 
         {/* Secondary tools (Coming Soon) */}
         <View style={styles.secondaryToolsRow}>
-          {SECONDARY_TOOLS.map((tool) => (
-            <View key={tool.title} style={styles.secondaryTool}>
+          {getHomeComingSoonTools().map((tool) => (
+            <View key={tool.id} style={styles.secondaryTool}>
               <ToolCard
-                title={tool.title}
+                title={tool.shortTitle}
                 description={tool.description}
                 icon={tool.icon}
                 comingSoon
@@ -441,7 +399,6 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: Radius.md,
     backgroundColor: Colors.gradientStart,
-    backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
     alignItems: 'center',
     justifyContent: 'center',
   },

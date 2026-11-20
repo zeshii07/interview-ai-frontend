@@ -1,19 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-// BUGFIX (Sprint 2 hotfix):
-//   The previous patch did `import { Stack as NativeStack, router } from 'expo-router/stack'`
-//   — but the `expo-router/stack` subpath only exports the `Stack` component,
-//   NOT the `router` object. The result was `router === undefined`, which
-//   crashed at `router.replace(lastWorkingRoute)` with:
-//     "Cannot read property 'replace' of undefined"
-//
-//   The fix is to import `router` from the main 'expo-router' entry —
-//   that export is a plain object that doesn't go through the deprecated
-//   getter chain (which is what made `Stack` undefined in the original code).
-import { Stack as NativeStack } from 'expo-router/stack';
-import { router } from 'expo-router';
-// Pure-JS fallback stack — doesn't require expo-glass-effect or react-native-screens
-// native module. Used only if the native Stack fails to load.
-import { Stack as JSStack } from 'expo-router/js-stack';
+// NOTE: `Stack` and `router` are both imported from the main 'expo-router'
+// entry. Earlier patches imported them from 'expo-router/stack' /
+// 'expo-router/js-stack' subpaths — those resolve, but they are non-standard
+// and one of them ('expo-router/stack') does not export `router`, which is
+// what caused the original "router is undefined" crash. The canonical import
+// is the safest and works across SDK versions.
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
   ActivityIndicator,
@@ -26,6 +18,14 @@ import {
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { Ionicons } from '@expo/vector-icons';
+
+import ErrorBoundary from '../components/ErrorBoundary';
+import { Colors } from '../constants/theme';
+import { clearSignedOutLocalState, onAuthChange } from '../services/authService';
+import { checkOnboardingSeen, loadLastWorkingRoute } from '../utils/storage';
+
+import LoginScreen from './(auth)/login';
+import OnboardingScreen from './(auth)/onboarding';
 
 // SPRINT 3: Suppress the React 19 + expo-router useLinking warning.
 // This is a known non-fatal warning that fires on app startup because
@@ -41,25 +41,17 @@ LogBox.ignoreLogs([
   "[object Object] is not a valid icon name for family",
 ]);
 
-import { Colors } from '../constants/theme';
-import { clearSignedOutLocalState, onAuthChange } from '../services/authService';
-import { checkOnboardingSeen, loadLastWorkingRoute } from '../utils/storage';
-
-import LoginScreen from './(auth)/login';
-import OnboardingScreen from './(auth)/onboarding';
-
-// Defensive resolver: prefer native Stack, fall back to pure-JS Stack if the
-// native one is undefined (can still happen if expo-glass-effect native module
-// fails to link on a stray Android build).
-const Stack = typeof NativeStack === 'function' ? NativeStack : JSStack;
-
 Appearance.setColorScheme('light');
 
 SplashScreen.preventAutoHideAsync().catch((error) => {
   console.warn('Could not prevent splash auto-hide:', error);
 });
 
-export default function RootLayout() {
+// Wrap the whole layout in the ErrorBoundary so that a render error in any
+// screen shows a friendly "Something went wrong" card with a Reload button
+// instead of hard-crashing the app (in release builds an uncaught render
+// error kills the process immediately).
+function RootLayout() {
   const [fontsLoaded, fontError] = useFonts(Ionicons.font);
 
   const [storageReady, setStorageReady] = useState(false);
@@ -194,7 +186,7 @@ export default function RootLayout() {
   if (showOnboarding) {
     return (
       <>
-        <StatusBar style="dark" backgroundColor={Colors.bgPrimary} />
+        <StatusBar style="dark" />
         <OnboardingScreen onComplete={() => setShowOnboarding(false)} />
       </>
     );
@@ -203,7 +195,7 @@ export default function RootLayout() {
   if (!user) {
     return (
       <>
-        <StatusBar style="dark" backgroundColor={Colors.bgPrimary} />
+        <StatusBar style="dark" />
         {startupError ? <Text style={styles.errorText}>{startupError}</Text> : null}
         <LoginScreen />
       </>
@@ -212,7 +204,7 @@ export default function RootLayout() {
 
   return (
     <>
-      <StatusBar style="dark" backgroundColor={Colors.bgPrimary} />
+      <StatusBar style="dark" />
 
       <Stack
         key="light"
@@ -259,6 +251,14 @@ export default function RootLayout() {
         <Stack.Screen name="jobs/saved" options={{ title: 'Saved Jobs' }} />
       </Stack>
     </>
+  );
+}
+
+export default function RootLayoutWithErrorBoundary() {
+  return (
+    <ErrorBoundary>
+      <RootLayout />
+    </ErrorBoundary>
   );
 }
 

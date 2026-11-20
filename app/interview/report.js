@@ -5,7 +5,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Sharing from 'expo-sharing';
-import * as FileSystem from 'expo-file-system';
+// SDK 54+ note: writeAsStringAsync/cacheDirectory/EncodingType only work
+// from the /legacy subpath — the main 'expo-file-system' entry exports
+// stubs that THROW at runtime.
+import * as FileSystem from 'expo-file-system/legacy';
 
 import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
 import useInterviewFlowStore from '../../store/interviewFlowStore';

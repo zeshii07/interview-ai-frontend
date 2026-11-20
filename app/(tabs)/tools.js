@@ -1,83 +1,16 @@
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
 import SectionHeader from '../../components/ui/SectionHeader';
 import ToolCard from '../../components/ui/ToolCard';
-import Badge from '../../components/ui/Badge';
-
-const ALL_TOOLS = [
-  {
-    title: 'ATS Resume Generator',
-    description: 'Generate a pro PDF resume',
-    icon: 'document-text-outline',
-    route: '/resume/generator',
-    category: 'Resume',
-    featured: true,
-  },
-  {
-    title: 'Analyze Your Resume',
-    description: 'AI-powered resume scoring',
-    icon: 'analytics-outline',
-    route: '/resume/analyze',
-    category: 'Resume',
-  },
-  {
-    title: 'Question Bank',
-    description: 'Practice key interview questions',
-    icon: 'help-circle-outline',
-    route: '/questions',
-    category: 'Interview',
-  },
-  {
-    title: 'AI Mock Interview',
-    description: 'Full simulated interview',
-    icon: 'mic-outline',
-    route: '/interview/type',
-    category: 'Interview',
-    featured: true,
-  },
-  {
-    title: 'Interview Readiness',
-    description: 'Check your preparation score',
-    icon: 'pulse-outline',
-    route: '/(tabs)/progress',
-    category: 'Insights',
-  },
-  {
-    title: 'Find Jobs',
-    description: 'Search across job boards',
-    icon: 'briefcase-outline',
-    route: '/(tabs)/jobs',
-    category: 'Career',
-  },
-  {
-    title: 'AI Coach',
-    description: 'Personalized coaching',
-    icon: 'headset-outline',
-    comingSoon: true,
-    category: 'Insights',
-  },
-  {
-    title: 'Salary Insights',
-    description: 'Compare salaries for your role',
-    icon: 'cash-outline',
-    comingSoon: true,
-    category: 'Career',
-  },
-];
-
-const CATEGORIES = ['All', 'Resume', 'Interview', 'Insights', 'Career'];
+import { TOOL_CATEGORIES, getToolsByCategory } from '../../constants/tools';
 
 export default function ToolsScreen() {
   const [activeCategory, setActiveCategory] = React.useState('All');
 
-  const filteredTools =
-    activeCategory === 'All'
-      ? ALL_TOOLS
-      : ALL_TOOLS.filter((t) => t.category === activeCategory);
+  const filteredTools = getToolsByCategory(activeCategory);
 
   return (
     <View style={styles.screen}>
@@ -92,7 +25,7 @@ export default function ToolsScreen() {
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryRow}
       >
-        {CATEGORIES.map((cat) => (
+        {TOOL_CATEGORIES.map((cat) => (
           <TouchableOpacity
             key={cat}
             onPress={() => setActiveCategory(cat)}
@@ -118,9 +51,13 @@ export default function ToolsScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        <SectionHeader
+          title={activeCategory === 'All' ? 'Every tool' : `${activeCategory} tools`}
+          icon="grid-outline"
+        />
         <View style={styles.toolsGrid}>
           {filteredTools.map((tool) => (
-            <View key={tool.title} style={styles.toolCardWrap}>
+            <View key={tool.id} style={styles.toolCardWrap}>
               <ToolCard
                 title={tool.title}
                 description={tool.description}
@@ -161,7 +98,7 @@ const styles = StyleSheet.create({
   },
   categoryRow: {
     paddingHorizontal: Spacing.md,
-    paddingBottom: Spacing.md,
+    paddingBottom: Spacing.sm,
     gap: Spacing.sm,
   },
   categoryChip: {
@@ -191,20 +128,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Spacing.md,
-    // SPRINT 3.2 FIX: removed `alignItems: 'stretch'` because on React Native,
-    // `alignItems: 'stretch'` on a `flexWrap: 'wrap'` container OVERRIDES
-    // the explicit width on children, stretching each card to full row width.
-    // That's why cards were stacking vertically (1 column) instead of
-    // sitting side-by-side (2 columns).
-    // The fix: rely on the explicit `flexBasis: '48%'` set on each card
-    // wrapper + `justifyContent: 'space-between'` to distribute them.
+    // No `alignItems: 'stretch'` — on a `flexWrap: 'wrap'` container it
+    // overrides the children's cross-axis size and stretches every card to
+    // full row width (breaks the 2-column layout). Rely on the explicit
+    // `flexBasis: '48%'` on each card wrapper + space-between instead.
     justifyContent: 'space-between',
     rowGap: Spacing.sm,
   },
   toolCardWrap: {
-    // SPRINT 3.2 FIX: use flexBasis instead of width % for reliable 2-column
-    // layout. flexBasis works with flexWrap: 'wrap' to ensure exactly 2
-    // cards per row on every screen size.
+    // flexBasis (not width %) works reliably with flexWrap: 'wrap' to keep
+    // exactly 2 cards per row on every screen size.
     flexBasis: '48%',
     flexGrow: 0,
     flexShrink: 0,

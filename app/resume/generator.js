@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { RESUME_TEMPLATES } from '../../constants/resumeTemplates';
 import useResumeBuilderStore from '../../store/resumeBuilderStore';
 import { resumeAPI } from '../../services/api';
 
@@ -15,15 +16,6 @@ import TemplateCard from '../../components/resume/TemplateCard';
 import FormField from '../../components/resume/FormField';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
-
-const RESUME_TEMPLATES = [
-  { id: 'ats-classic', name: 'Professional', description: 'Clean, balanced — works for most applications.', icon: 'document-text-outline', accent: '#4F46E5', badge: 'Recommended' },
-  { id: 'corporate-professional', name: 'Modern', description: 'Navy styling for business and large companies.', icon: 'business-outline', accent: '#245FC7', badge: 'Popular' },
-  { id: 'technical-compact', name: 'Technical', description: 'Compact skills-first layout for software roles.', icon: 'code-slash-outline', accent: '#0F766E' },
-  { id: 'european-standard', name: 'Minimal', description: 'Clean A4 chronological CV, no clutter.', icon: 'remove-circle-outline', accent: '#676579' },
-  { id: 'eu-academic', name: 'Executive', description: 'Senior-level CV with leadership emphasis.', icon: 'ribbon-outline', accent: '#A85C08' },
-  { id: 'academic-photo', name: 'Creative', description: 'Photo CV with portrait, for academic applications.', icon: 'person-circle-outline', accent: '#7C3AED', badge: 'With photo' },
-];
 
 const WIZARD_STEPS = [
   { key: 'template', label: 'Template', icon: 'document-text-outline' },

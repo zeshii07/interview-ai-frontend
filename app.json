@@ -62,7 +62,8 @@
           "photosPermission": "Allow Hirely to access your photos to set your profile picture.",
           "cameraPermission": "Allow Hirely to access your camera to take a profile picture."
         }
-      ]
+      ],
+      "expo-font"
     ],
     "extra": {
       "router": {},

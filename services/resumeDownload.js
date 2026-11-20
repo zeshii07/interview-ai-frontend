@@ -1,14 +1,36 @@
+import { Alert, Platform } from 'react-native';
 import * as Sharing from 'expo-sharing';
-import { Alert } from 'react-native';
+import * as LegacyFileSystem from 'expo-file-system/legacy';
+import * as NewFileSystem from 'expo-file-system';
 
-import {
-  buildResumePdfBytes,
-  buildResumeFilename,
-} from './localResumePdf';
-import {
-  buildResumeDocBytes,
-  buildResumeDocFilename,
-} from './localResumeDocx';
+import { buildResumePdfBytes } from './localResumePdf';
+import { buildResumeDocBytes, buildResumeDocFilename } from './localResumeDocx';
+import { bytesToBase64 } from '../utils/bytes';
+
+/**
+ * Resume download / save pipeline.
+ *
+ * Design notes (this file replaced a fragile version):
+ *
+ * 1. WRITING — the primary write path is the legacy expo-file-system API
+ *    (`expo-file-system/legacy`: writeAsStringAsync + base64), which has
+ *    been rock-solid on Android/iOS for years. The new File/Directory API
+ *    (`new File(...).write(uint8)`) is kept only as a fallback: it has
+ *    known native crash reports on some SDK versions, and it was the most
+ *    likely cause of "app restarts when tapping PDF".
+ *    IMPORTANT: `writeAsStringAsync` imported from 'expo-file-system' (the
+ *    main entry) THROWS in SDK 54+ — it must come from the /legacy subpath.
+ *
+ * 2. SAVING — on Android the user gets a real "Save to Downloads" action
+ *    (StorageAccessFramework directory picker) in addition to the share
+ *    sheet, so the file genuinely lands somewhere visible. On iOS the share
+ *    sheet (which contains "Save to Files") opens directly.
+ *
+ * 3. MIME TYPES — .pdf gets application/pdf; the Word document gets
+ *    application/msword (it is a Word-HTML .doc). A wrong MIME type makes
+ *    Android share targets silently reject the file — that was the "pressed
+ *    save and share, nothing was saved" bug.
+ */
 
 function safeFilenamePart(value, fallback) {
   const cleaned = String(value || '')
@@ -19,66 +41,81 @@ function safeFilenamePart(value, fallback) {
   return cleaned || fallback;
 }
 
-/**
- * Lazy-load expo-file-system's File and Paths. The new File/Directory API
- * (SDK 53+) is imported dynamically to avoid crashing the app at startup
- * if the API isn't available in the current Expo Go version.
- */
-let _fsModule = null;
-async function getFs() {
-  if (_fsModule === null) {
-    try {
-      _fsModule = await import('expo-file-system');
-    } catch (err) {
-      console.warn('[resumeDownload] Could not load expo-file-system:', err?.message);
-      _fsModule = false;
-    }
-  }
-  return _fsModule || null;
+function legacyFsAvailable() {
+  return (
+    LegacyFileSystem &&
+    typeof LegacyFileSystem.writeAsStringAsync === 'function' &&
+    typeof LegacyFileSystem.cacheDirectory === 'string' &&
+    LegacyFileSystem.cacheDirectory
+  );
+}
+
+function newFsAvailable() {
+  return Boolean(NewFileSystem && NewFileSystem.File && NewFileSystem.Paths);
 }
 
 /**
- * Write bytes to a file in the cache directory. Returns the file URI.
- * Falls back to legacy API if the new File/Directory API isn't available.
+ * Write bytes to a cache file and return its file:// URI.
+ * Legacy API first (base64 string write), new File API as fallback.
  */
 async function writeCacheFile(bytes, filename) {
-  const fs = await getFs();
-  if (!fs) throw new Error('File system not available');
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
 
-  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-
-  // Try the new File/Directory API (SDK 53+)
-  if (fs.File && fs.Paths) {
-    try {
-      const file = new fs.File(fs.Paths.cache, filename);
-      if (file.exists) file.delete();
-      file.create();
-      file.write(data);
-      return file.uri;
-    } catch (err) {
-      console.warn('[resumeDownload] New File API failed, falling back to legacy:', err?.message);
-    }
-  }
-
-  // Legacy API fallback
-  if (fs.writeAsStringAsync && fs.documentDirectory) {
-    const uri = `${fs.documentDirectory}${filename}`;
-    const base64 = bytesToBase64(data);
-    await fs.writeAsStringAsync(uri, base64, { encoding: fs.EncodingType.Base64 });
+  if (legacyFsAvailable()) {
+    const uri = `${LegacyFileSystem.cacheDirectory}${filename}`;
+    await LegacyFileSystem.writeAsStringAsync(uri, bytesToBase64(data), {
+      encoding: LegacyFileSystem.EncodingType.Base64,
+    });
     return uri;
   }
 
-  throw new Error('No file system API available');
+  if (newFsAvailable()) {
+    const file = new NewFileSystem.File(NewFileSystem.Paths.cache, filename);
+    if (file.exists) file.delete();
+    file.create();
+    file.write(data);
+    return file.uri;
+  }
+
+  throw new Error('No file system API available on this device.');
 }
 
 /**
- * Open the system share sheet.
+ * Android: let the user pick a folder (defaults to Downloads) and write the
+ * file into it via the Storage Access Framework. The saved file is visible
+ * to the system Files app and every other app.
+ *
+ * Returns the saved file URI, or null if the user cancelled / denied.
  */
+async function saveToPickedFolder(base64, filename, mimeType) {
+  if (!LegacyFileSystem.StorageAccessFramework) {
+    return null;
+  }
+  const permissions =
+    await LegacyFileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
+  if (!permissions.granted) {
+    return null;
+  }
+
+  const fileUri = await LegacyFileSystem.StorageAccessFramework.createFileAsync(
+    permissions.directoryUri,
+    filename,
+    mimeType
+  );
+  await LegacyFileSystem.writeAsStringAsync(fileUri, base64, {
+    encoding: LegacyFileSystem.EncodingType.Base64,
+  });
+  return fileUri;
+}
+
 async function openShareSheet(fileUri, mimeType, uti, dialogTitle) {
   const canShare = await Sharing.isAvailableAsync();
   if (!canShare) {
-    Alert.alert('File created', `The file was saved at:\n${fileUri}`);
-    return { uri: fileUri, shared: false, source: 'local' };
+    Alert.alert(
+      'Sharing unavailable',
+      `The file was created at:\n${fileUri}\n\nShare it manually from your device files.`
+    );
+    return { shared: false, uri: fileUri };
   }
 
   await Sharing.shareAsync(fileUri, {
@@ -86,44 +123,84 @@ async function openShareSheet(fileUri, mimeType, uti, dialogTitle) {
     dialogTitle: dialogTitle || 'Save or share your Hirely resume',
     UTI: uti,
   });
-
-  return { uri: fileUri, shared: true, source: 'local' };
+  return { shared: true, uri: fileUri };
 }
 
 /**
- * Open the system save/share sheet after writing the file to cache.
- *
- * Expo's sandbox has no public Downloads directory. Pretending otherwise
- * stores a file in private app storage where users cannot find it. The
- * platform sheet is the supported path: Android users can select Files or a
- * Downloads-capable app, while iOS users can select Save to Files.
+ * Present the save UI. Android: an action alert with "Save to Downloads"
+ * (guaranteed, user-visible save) and "Share a copy". iOS: the share sheet
+ * directly (it includes Save to Files).
  */
-async function saveOrShareFile(bytes, filename, mimeType, uti, dialogTitle) {
-  const cacheUri = await writeCacheFile(bytes, filename);
+async function presentSaveOptions(bytes, { filename, mimeType, uti, dialogTitle }) {
+  const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  const cacheUri = await writeCacheFile(data, filename);
 
-  return new Promise((resolve, reject) => {
-    Alert.alert(
-      dialogTitle || 'Save your resume',
-      'Choose Save / Share, then select where to keep your file.',
-      [
-        {
-          text: 'Save / Share',
-          onPress: async () => {
-            try {
-              resolve(await openShareSheet(cacheUri, mimeType, uti, dialogTitle));
-            } catch (error) {
-              reject(error);
-            }
+  if (Platform.OS === 'android') {
+    return new Promise((resolve) => {
+      Alert.alert(
+        dialogTitle || 'Save your resume',
+        'Choose "Save to Downloads" to keep the file on your device, or share a copy with another app.',
+        [
+          {
+            text: 'Save to Downloads',
+            onPress: async () => {
+              try {
+                const savedUri = await saveToPickedFolder(
+                  bytesToBase64(data),
+                  filename,
+                  mimeType
+                );
+                if (savedUri) {
+                  Alert.alert(
+                    'Saved',
+                    'Your resume has been saved to the folder you picked (usually Downloads). Open your Files app to find it.'
+                  );
+                  resolve({ savedToDisk: true, uri: savedUri });
+                } else {
+                  // User closed the folder picker — fall back to the share
+                  // sheet so the file is never left in limbo.
+                  const result = await openShareSheet(
+                    cacheUri,
+                    mimeType,
+                    uti,
+                    dialogTitle
+                  );
+                  resolve({ savedToDisk: false, ...result });
+                }
+              } catch (error) {
+                Alert.alert(
+                  'Could not save',
+                  `${error?.message || 'Saving failed.'} You can try again and pick a different folder.`
+                );
+                resolve({ savedToDisk: false, uri: cacheUri, error: error?.message });
+              }
+            },
           },
-        },
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => resolve({ uri: cacheUri, shared: false, savedToDisk: false, source: 'local' }),
-        },
-      ]
-    );
-  });
+          {
+            text: 'Share a copy',
+            onPress: async () => {
+              try {
+                const result = await openShareSheet(cacheUri, mimeType, uti, dialogTitle);
+                resolve({ savedToDisk: false, ...result });
+              } catch (error) {
+                Alert.alert('Could not share', error?.message || 'Sharing failed.');
+                resolve({ shared: false, uri: cacheUri, error: error?.message });
+              }
+            },
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+            onPress: () => resolve({ savedToDisk: false, shared: false, uri: cacheUri }),
+          },
+        ]
+      );
+    });
+  }
+
+  // iOS (and other platforms): the share sheet has "Save to Files" built in.
+  const result = await openShareSheet(cacheUri, mimeType, uti, dialogTitle);
+  return { savedToDisk: false, ...result };
 }
 
 // ---------- PDF ----------
@@ -138,13 +215,12 @@ export async function generateAndShareResumePdf(resume) {
   const filename = `${firstName}_${lastName}_Hirely_Resume.pdf`;
 
   const bytes = await buildResumePdfBytes(resume);
-  return saveOrShareFile(
-    bytes,
+  return presentSaveOptions(bytes, {
     filename,
-    'application/pdf',
-    'com.adobe.pdf',
-    'Save your resume (PDF)'
-  );
+    mimeType: 'application/pdf',
+    uti: 'com.adobe.pdf',
+    dialogTitle: 'Save your resume (PDF)',
+  });
 }
 
 export const generateLocalResumePdf = generateAndShareResumePdf;
@@ -158,13 +234,15 @@ export async function generateAndShareResumeDocx(resume) {
 
   const filename = buildResumeDocFilename(resume);
   const bytes = await buildResumeDocBytes(resume);
-  return saveOrShareFile(
-    bytes,
+  return presentSaveOptions(bytes, {
     filename,
-    'application/msword',
-    'com.microsoft.word.doc',
-    'Save your resume (Word document)'
-  );
+    // The document is Word-HTML saved as .doc — application/msword is the
+    // matching MIME. The previous code sent the .docx (OOXML) MIME type,
+    // which Android targets reject for this file.
+    mimeType: 'application/msword',
+    uti: 'com.microsoft.word.doc',
+    dialogTitle: 'Save your resume (Word document)',
+  });
 }
 
 export const generateLocalResumeDocx = generateAndShareResumeDocx;

@@ -8,10 +8,10 @@ import useInterviewStore from '../../store/interviewStore';
 import { Colors, Gradients } from '../../constants/theme';
 import { saveLastWorkingRoute } from '../../utils/storage';
 
-const p = { ink: Colors.textPrimary, muted: Colors.textMuted, purple: '#7047F5', dark: '#5330DB', lavender: Colors.primaryBg, line: Colors.border, bg: Colors.bgPrimary, card: Colors.bgCard, green: '#169B70', amber: '#B86D12', red: '#C84A59' };
+const p = { ink: Colors.textPrimary, muted: Colors.textMuted, purple: Colors.primary, dark: Colors.primaryDark, lavender: Colors.primaryBg, line: Colors.border, bg: Colors.bgPrimary, card: Colors.bgCard, green: Colors.success, amber: Colors.warning, red: Colors.error };
 
 function InsightCard({ icon, title, tone = 'purple', items = [] }) {
-  const tones = { purple: [p.lavender, p.dark], green: ['#DDF5EA', p.green], amber: ['#FBEACD', p.amber] };
+  const tones = { purple: [p.lavender, p.dark], green: [Colors.successBg, p.green], amber: [Colors.warningBg, p.amber] };
   const [backgroundColor, color] = tones[tone];
   if (!items.length) return null;
   return <View style={styles.card}><View style={styles.cardHead}><View style={[styles.cardIcon, { backgroundColor }]}><Ionicons name={icon} size={20} color={color} /></View><Text style={styles.cardTitle}>{title}</Text></View>{items.map((item, index) => <View key={`${title}-${index}`} style={styles.item}><View style={[styles.dot, { backgroundColor: color }]} /><View style={styles.itemCopy}><Text selectable style={styles.itemTitle}>{item.area || item.section || item}</Text>{item.detail ? <Text selectable style={styles.itemBody}>{item.detail}</Text> : null}{item.suggested ? <Text selectable style={styles.itemBody}>{item.suggested}</Text> : null}{item.reason ? <Text selectable style={styles.reason}>{item.reason}</Text> : null}</View></View>)}</View>;

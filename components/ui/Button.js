@@ -110,7 +110,7 @@ const sizeStyles = StyleSheet.create({
 const variantStyles = StyleSheet.create({
   primary: {
     backgroundColor: Colors.gradientStart,
-    backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
     ...Shadows.primary,
   },
   secondary: {

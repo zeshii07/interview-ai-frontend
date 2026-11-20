@@ -1,16 +1,21 @@
 import { useEffect, useRef } from 'react';
-import { Platform, View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Tabs as NativeTabs } from 'expo-router/js-tabs';
+import { Platform } from 'react-native';
+import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Shadows } from '../../constants/theme';
 import useInterviewStore from '../../store/interviewStore';
 import { getCurrentUser } from '../../services/authService';
 
-// Defensive resolver — falls back to a hand-rolled tab bar if the native
-// Tabs fails to load (e.g. react-native-screens native module missing).
-const Tabs = typeof NativeTabs === 'function' ? NativeTabs : null;
-
+/**
+ * Tab bar for the 5 primary tabs (Home, Tools, Progress, Profile, Jobs).
+ *
+ * NOTE: `Tabs` is imported from the main 'expo-router' entry — the canonical
+ * import. The old code imported from 'expo-router/js-tabs' and rendered a
+ * dead-end "fallback mode" screen if the import came back undefined; that
+ * fallback showed users an error page instead of the app. If Tabs ever fails
+ * to load, the ErrorBoundary in app/_layout.js now handles it properly.
+ */
 export default function TabLayout() {
   const initializeApp = useInterviewStore((state) => state.initializeApp);
   const isMounted = useRef(true);
@@ -28,15 +33,11 @@ export default function TabLayout() {
     return () => { isMounted.current = false; };
   }, [initializeApp]);
 
-  if (!Tabs) return <FallbackTabLayout />;
-
   return (
     <Tabs
       screenOptions={{
-        // IMPROVED (Sprint 3): Taller tab bar with bigger touch targets,
-        // bigger labels, and more padding so labels are clearly visible
-        // above the icons. Previously the labels were too small (11pt) and
-        // positioned too close to the icons, making them hard to see.
+        // Taller tab bar with bigger touch targets, bigger labels, and more
+        // padding so labels are clearly visible above the icons.
         tabBarStyle: {
           backgroundColor: Colors.bgCard,
           borderTopColor: Colors.border,
@@ -49,7 +50,6 @@ export default function TabLayout() {
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
 
-        // IMPROVED: bigger label font + more visible weight + better spacing
         tabBarLabelStyle: {
           fontSize: FontSizes.sm - 1, // 12pt — readable
           fontWeight: '700',
@@ -57,7 +57,6 @@ export default function TabLayout() {
           letterSpacing: 0.2,
         },
 
-        // IMPROVED: icon size 24 instead of default 22 for better tap target
         tabBarIconStyle: {
           marginTop: 0,
           marginBottom: 0,
@@ -126,66 +125,3 @@ export default function TabLayout() {
     </Tabs>
   );
 }
-
-function FallbackTabLayout() {
-  const fallbackScreens = [
-    { name: 'index', title: 'Home', icon: 'home-outline' },
-    { name: 'tools', title: 'Tools', icon: 'grid-outline' },
-    { name: 'progress', title: 'Progress', icon: 'trending-up-outline' },
-    { name: 'profile', title: 'Profile', icon: 'person-outline' },
-    { name: 'jobs', title: 'Jobs', icon: 'briefcase-outline' },
-  ];
-
-  return (
-    <View style={fallbackStyles.container}>
-      <View style={fallbackStyles.content}>
-        <Text style={fallbackStyles.title}>Tab layout fallback mode</Text>
-        <Text style={fallbackStyles.body}>
-          expo-router&apos;s `Tabs` is undefined. Run:{'\n\n'}
-          1. `npx expo install --fix`{'\n'}
-          2. `npx expo start -c`{'\n\n'}
-          See FIXES.md for the full diagnostic.
-        </Text>
-      </View>
-      <View style={fallbackStyles.tabBar}>
-        {fallbackScreens.map((s) => (
-          <TouchableOpacity key={s.name} style={fallbackStyles.tab} disabled>
-            <Ionicons name={s.icon} size={22} color={Colors.textMuted} />
-            <Text style={fallbackStyles.tabLabel}>{s.title}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-const fallbackStyles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.bgPrimary },
-  content: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: Spacing.lg,
-  },
-  title: {
-    fontSize: FontSizes.lg,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: Spacing.sm,
-  },
-  body: {
-    fontSize: FontSizes.sm,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    lineHeight: 20,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    height: 76,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    backgroundColor: Colors.bgCard,
-  },
-  tab: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabLabel: { fontSize: 12, marginTop: 4, color: Colors.textMuted, fontWeight: '700' },
-});

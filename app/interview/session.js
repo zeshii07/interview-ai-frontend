@@ -27,15 +27,15 @@ import { saveLastWorkingRoute } from '../../utils/storage';
 const palette = {
   ink: Colors.textPrimary,
   muted: Colors.textMuted,
-  purple: '#7047F5',
-  purpleDark: '#5330DB',
+  purple: Colors.primary,
+  purpleDark: Colors.primaryDark,
   lavender: Colors.primaryBg,
   line: Colors.border,
   background: Colors.bgPrimary,
   surface: Colors.bgCard,
-  success: '#169B70',
-  warning: '#C77A19',
-  blue: '#3478F6',
+  success: Colors.success,
+  warning: Colors.warning,
+  blue: Colors.info,
 };
 
 const QUESTION_TYPES = [

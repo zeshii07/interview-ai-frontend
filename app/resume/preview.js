@@ -15,13 +15,36 @@ import { router } from 'expo-router';
 
 import useResumeBuilderStore from '../../store/resumeBuilderStore';
 import { generateAndShareResumePdf, generateAndShareResumeDocx } from '../../services/resumeDownload';
+import { buildResumePdfLayout } from '../../services/localResumePdf';
+import PdfDocumentPreview from '../../components/resume/PdfDocumentPreview';
 import { Colors, Gradients, Radius, Shadows, Spacing } from '../../constants/theme';
+import { getResumeTemplate, getResumeTemplateTheme } from '../../constants/resumeTemplates';
 import { saveLastWorkingRoute } from '../../utils/storage';
 
-function PreviewSection({ title, children }) {
+function PreviewSection({ title, children, theme }) {
+  // Section title styling mirrors the heading styles used by the PDF/DOCX
+  // generators for the same template (constants/resumeTemplates.js), so the
+  // preview looks like the document the user will download.
+  const headingStyle = theme?.headingStyle || 'classic';
+  const accent = theme?.accent || '#292929';
+
+  const titleStyle = [styles.sectionTitle];
+  if (headingStyle === 'band') {
+    titleStyle.push(styles.sectionTitleBandText, { backgroundColor: accent });
+  } else if (headingStyle === 'european' || headingStyle === 'technical') {
+    titleStyle.push({ color: accent, borderBottomColor: headingStyle === 'european' ? accent : 'transparent' });
+  } else if (headingStyle === 'academic') {
+    titleStyle.push({ textAlign: 'center', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme?.lightRule || '#C8C8C8' });
+  }
+
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
+      <View style={styles.sectionTitleRow}>
+        {headingStyle === 'technical' ? (
+          <View style={[styles.sectionTitleBar, { backgroundColor: accent }]} />
+        ) : null}
+        <Text style={titleStyle}>{title}</Text>
+      </View>
       {children}
     </View>
   );
@@ -58,6 +81,23 @@ export default function ResumePreviewScreen() {
   const [downloading, setDownloading] = React.useState(false);
   const [downloadingFormat, setDownloadingFormat] = React.useState(null); // 'pdf' | 'docx' | null
 
+  // --- Full document preview state ---
+  // 'preview' shows the exact document the user will download (rendered
+  // from the PDF generator's own layout); 'edit' shows the quick-edit form.
+  const [mode, setMode] = React.useState('preview');
+  const [layout, setLayout] = React.useState(null);
+  const [layoutBuilding, setLayoutBuilding] = React.useState(true);
+
+  // Template theme — mirrors the document tokens so the preview matches the
+  // downloaded PDF/DOCX for whichever template the user picked.
+  const templateId = optimizedResume?.templateId;
+  const theme = getResumeTemplateTheme(templateId);
+  const templateMeta = getResumeTemplate(templateId);
+  const isAcademicTemplate =
+    templateId === 'eu-academic' || templateId === 'academic-photo';
+  const headerAlign =
+    theme.headerAlign === 'center' ? 'center' : 'left';
+
   React.useEffect(() => {
     // Save the GENERATOR route (not /resume/preview) as the last working
     // route. That way, if the user restarts the app while on the preview
@@ -75,6 +115,33 @@ export default function ResumePreviewScreen() {
       router.replace('/resume/generator');
     }
   }, [builderHydrated, optimizedResume]);
+
+  // Build the document layout (debounced) whenever the resume changes or the
+  // user switches back to the preview tab. Edits while in 'edit' mode don't
+  // rebuild anything; the rebuild happens once they switch back.
+  React.useEffect(() => {
+    if (mode !== 'preview' || !optimizedResume) return undefined;
+
+    let cancelled = false;
+    setLayoutBuilding(true);
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await buildResumePdfLayout(optimizedResume);
+        if (!cancelled) setLayout(result);
+      } catch (err) {
+        if (!cancelled) setLayout(null);
+        console.warn('[preview] Failed to build document layout:', err?.message);
+      } finally {
+        if (!cancelled) setLayoutBuilding(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [optimizedResume, mode]);
 
   if (!builderHydrated || !optimizedResume) {
     return (
@@ -158,6 +225,40 @@ export default function ResumePreviewScreen() {
           </Pressable>
           <Text style={styles.screenTitle}>Review Resume</Text>
           <View style={styles.iconButton} />
+        </View>
+
+        {/* Document preview vs quick-edit switch */}
+        <View style={styles.segmented}>
+          <Pressable
+            onPress={() => setMode('preview')}
+            style={[styles.segment, mode === 'preview' && styles.segmentActive]}
+          >
+            <Ionicons
+              name="document-outline"
+              size={15}
+              color={mode === 'preview' ? '#FFFFFF' : Colors.primaryDark}
+            />
+            <Text
+              style={[styles.segmentText, mode === 'preview' && styles.segmentTextActive]}
+            >
+              Document preview
+            </Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setMode('edit')}
+            style={[styles.segment, mode === 'edit' && styles.segmentActive]}
+          >
+            <Ionicons
+              name="create-outline"
+              size={15}
+              color={mode === 'edit' ? '#FFFFFF' : Colors.primaryDark}
+            />
+            <Text
+              style={[styles.segmentText, mode === 'edit' && styles.segmentTextActive]}
+            >
+              Edit wording
+            </Text>
+          </Pressable>
         </View>
 
         {optimizationMode === 'local' ? (
@@ -275,27 +376,113 @@ export default function ResumePreviewScreen() {
           </View>
         ) : null}
 
-        <View style={styles.paper}>
-          <Text style={styles.name}>
-            {`${optimizedResume.firstName || ''} ${
-              optimizedResume.lastName || ''
-            }`.trim().toUpperCase()}
-          </Text>
+        {mode === 'preview' ? (
+          <View style={styles.previewBlock}>
+            <View style={styles.templateBadgeRow}>
+              <View style={[styles.templateBadgeDot, { backgroundColor: theme.accent }]} />
+              <Text style={styles.templateBadgeText}>
+                {templateMeta.name} — this is exactly how your downloaded PDF will look
+              </Text>
+            </View>
 
-          <Text style={styles.contact}>
-            {[
-              optimizedResume.email,
-              optimizedResume.phone,
-              optimizedResume.location,
-              optimizedResume.linkedin,
-              optimizedResume.github,
-              optimizedResume.portfolio,
-            ]
-              .filter(Boolean)
-              .join(' | ')}
-          </Text>
+            {layoutBuilding && !layout ? (
+              <View style={styles.previewLoading}>
+                <ActivityIndicator size="small" color={Colors.primary} />
+                <Text style={styles.previewLoadingText}>Rendering your document…</Text>
+              </View>
+            ) : layout ? (
+              <PdfDocumentPreview layout={layout} />
+            ) : (
+              <View style={styles.previewLoading}>
+                <Ionicons
+                  name="warning-outline"
+                  size={20}
+                  color={Colors.warning || '#B86D12'}
+                />
+                <Text style={styles.previewLoadingText}>
+                  Preview is unavailable right now — your PDF download will still work.
+                </Text>
+              </View>
+            )}
 
-          <PreviewSection title="Professional Summary">
+            <Text style={styles.previewHint}>
+              Spotted a typo? Switch to Edit wording, fix it, and come back — this preview
+              updates automatically.
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.templateBadgeRow}>
+              <View style={[styles.templateBadgeDot, { backgroundColor: theme.accent }]} />
+              <Text style={styles.templateBadgeText}>
+                {templateMeta.name} template — the PDF/Word download uses this exact style
+              </Text>
+            </View>
+
+            <View style={styles.paper}>
+          <View
+            style={[
+              styles.paperHeader,
+              templateId === 'academic-photo' && styles.paperHeaderWithPhoto,
+            ]}
+          >
+            <View style={styles.paperHeaderText}>
+              <Text
+                style={[
+                  styles.name,
+                  { color: theme.ink, textAlign: headerAlign },
+                ]}
+              >
+                {`${optimizedResume.firstName || ''} ${
+                  optimizedResume.lastName || ''
+                }`.trim().toUpperCase()}
+              </Text>
+              {optimizedResume.targetRole ? (
+                <Text
+                  style={[
+                    styles.targetRole,
+                    { color: theme.muted, textAlign: headerAlign },
+                  ]}
+                >
+                  {optimizedResume.targetRole}
+                </Text>
+              ) : null}
+              <Text style={[styles.contact, { color: theme.muted, textAlign: headerAlign }]}>
+                {[
+                  optimizedResume.email,
+                  optimizedResume.phone,
+                  optimizedResume.location,
+                  optimizedResume.linkedin,
+                  optimizedResume.github,
+                  optimizedResume.portfolio,
+                ]
+                  .filter(Boolean)
+                  .join(' | ')}
+              </Text>
+              {isAcademicTemplate ? (
+                <Text style={[styles.academicDetailsLine, { color: theme.body }]}>
+                  {[
+                    optimizedResume.nationality && `Nationality: ${optimizedResume.nationality}`,
+                    optimizedResume.dateOfBirth && `Date of birth: ${optimizedResume.dateOfBirth}`,
+                    optimizedResume.placeOfBirth && `Place of birth: ${optimizedResume.placeOfBirth}`,
+                  ]
+                    .filter(Boolean)
+                    .join('  |  ')}
+                </Text>
+              ) : null}
+            </View>
+            {templateId === 'academic-photo' && optimizedResume.photoBase64 ? (
+              <Image
+                source={{
+                  uri: `data:${optimizedResume.photoMimeType || 'image/jpeg'};base64,${optimizedResume.photoBase64}`,
+                }}
+                style={styles.paperPhoto}
+                resizeMode="cover"
+              />
+            ) : null}
+          </View>
+
+          <PreviewSection title="Professional Summary" theme={theme}>
             <EditableText
               value={optimizedResume.summary}
               onChangeText={(value) => updateRoot('summary', value)}
@@ -303,7 +490,7 @@ export default function ResumePreviewScreen() {
           </PreviewSection>
 
           {(optimizedResume.experience || []).length ? (
-            <PreviewSection title="Professional Experience">
+            <PreviewSection title="Professional Experience" theme={theme}>
               {optimizedResume.experience.map((item, index) => (
                 <View key={`experience-${index}`} style={styles.resumeItem}>
                   <EditableText
@@ -369,7 +556,7 @@ export default function ResumePreviewScreen() {
           ) : null}
 
           {(optimizedResume.education || []).length ? (
-            <PreviewSection title="Education">
+            <PreviewSection title="Education" theme={theme}>
               {optimizedResume.education.map((item, index) => (
                 <View key={`education-${index}`} style={styles.resumeItem}>
                   <TextInput
@@ -415,7 +602,7 @@ export default function ResumePreviewScreen() {
           ) : null}
 
           {(optimizedResume.skills || []).length ? (
-            <PreviewSection title="Skills">
+            <PreviewSection title="Skills" theme={theme}>
               <EditableText
                 value={optimizedResume.skills.join(', ')}
                 onChangeText={(value) =>
@@ -432,7 +619,7 @@ export default function ResumePreviewScreen() {
           ) : null}
 
           {(optimizedResume.projects || []).length ? (
-            <PreviewSection title="Projects">
+            <PreviewSection title="Projects" theme={theme}>
               {optimizedResume.projects.map((item, index) => (
                 <View key={`project-${index}`} style={styles.resumeItem}>
                   <TextInput
@@ -454,7 +641,7 @@ export default function ResumePreviewScreen() {
           ) : null}
 
           {(optimizedResume.certifications || []).length ? (
-            <PreviewSection title="Certifications">
+            <PreviewSection title="Certifications" theme={theme}>
               {optimizedResume.certifications.map((item, index) => (
                 <View key={`certification-${index}`} style={styles.resumeItem}>
                   <EditableText
@@ -489,6 +676,7 @@ export default function ResumePreviewScreen() {
             <PreviewSection
               key={`custom-section-${index}`}
               title={item.title || 'Additional Information'}
+              theme={theme}
             >
               <TextInput
                 value={item.title || ''}
@@ -506,7 +694,9 @@ export default function ResumePreviewScreen() {
               />
             </PreviewSection>
           ))}
-        </View>
+            </View>
+          </>
+        )}
 
         <View style={styles.actions}>
           <Pressable
@@ -528,12 +718,12 @@ export default function ResumePreviewScreen() {
             ]}
           >
             <Ionicons
-              name={downloadingFormat === 'pdf' ? 'hourglass-outline' : 'document-outline'}
-              size={21}
+              name={downloadingFormat === 'pdf' ? 'hourglass-outline' : 'download-outline'}
+              size={20}
               color="#FFFFFF"
             />
             <Text style={styles.primaryButtonText}>
-              {downloadingFormat === 'pdf' ? 'Creating PDF...' : 'PDF'}
+              {downloadingFormat === 'pdf' ? 'Creating PDF…' : 'PDF'}
             </Text>
           </Pressable>
 
@@ -546,12 +736,12 @@ export default function ResumePreviewScreen() {
             ]}
           >
             <Ionicons
-              name={downloadingFormat === 'docx' ? 'hourglass-outline' : 'document-text-outline'}
-              size={21}
+              name={downloadingFormat === 'docx' ? 'hourglass-outline' : 'download-outline'}
+              size={20}
               color="#FFFFFF"
             />
             <Text style={styles.primaryButtonText}>
-              {downloadingFormat === 'docx' ? 'Creating Word...' : 'Word'}
+              {downloadingFormat === 'docx' ? 'Creating Word…' : 'Word'}
             </Text>
           </Pressable>
         </View>
@@ -587,6 +777,62 @@ const styles = StyleSheet.create({
     color: Colors.textPrimary,
     fontSize: 19,
     fontWeight: '800',
+  },
+  segmented: {
+    flexDirection: 'row',
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 3,
+  },
+  segment: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    minHeight: 38,
+    borderRadius: Radius.sm,
+  },
+  segmentActive: {
+    backgroundColor: Colors.primary,
+    ...Shadows.small,
+  },
+  segmentText: {
+    color: Colors.primaryDark,
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  segmentTextActive: {
+    color: '#FFFFFF',
+  },
+  previewBlock: {
+    gap: Spacing.sm,
+  },
+  previewLoading: {
+    minHeight: 220,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.bgCard,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: Spacing.lg,
+  },
+  previewLoadingText: {
+    color: Colors.textSecondary,
+    fontSize: 12.5,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  previewHint: {
+    color: Colors.textMuted,
+    fontSize: 11.5,
+    lineHeight: 16,
+    textAlign: 'center',
+    paddingHorizontal: Spacing.sm,
   },
   notice: {
     flexDirection: 'row',
@@ -692,6 +938,22 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
+  templateBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    paddingHorizontal: 4,
+  },
+  templateBadgeDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  templateBadgeText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    fontWeight: '600',
+  },
   paper: {
     gap: 16,
     padding: 22,
@@ -701,27 +963,72 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     ...Shadows.medium,
   },
+  paperHeader: {
+    gap: 3,
+  },
+  paperHeaderWithPhoto: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  paperHeaderText: {
+    flex: 1,
+    gap: 3,
+  },
+  paperPhoto: {
+    width: 74,
+    height: 92,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
   name: {
-    color: '#111111',
     fontSize: 25,
     fontWeight: '900',
-    textAlign: 'center',
+  },
+  targetRole: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
   },
   contact: {
-    color: '#333333',
     fontSize: 10,
     lineHeight: 15,
-    textAlign: 'center',
+  },
+  academicDetailsLine: {
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 2,
   },
   section: { gap: 9 },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  sectionTitleBar: {
+    width: 4,
+    height: 14,
+    borderRadius: 2,
+  },
   sectionTitle: {
+    flex: 1,
     paddingBottom: 5,
     borderBottomWidth: 1,
-    borderBottomColor: '#333333',
-    color: '#111111',
+    borderBottomColor: '#C8C8C8',
+    color: '#292929',
     fontSize: 13,
     fontWeight: '900',
     textTransform: 'uppercase',
+  },
+  sectionTitleBandText: {
+    alignSelf: 'flex-start',
+    color: '#FFFFFF',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    paddingBottom: 3,
+    borderRadius: 3,
+    borderBottomWidth: 0,
   },
   resumeItem: { gap: 7, marginBottom: 6 },
   editableText: {

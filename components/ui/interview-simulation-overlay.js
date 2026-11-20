@@ -66,7 +66,7 @@ export default function InterviewSimulationOverlay({ visible = true, phase, role
               <Animated.View key={step} entering={FadeIn.delay(index * 120)} style={styles.stepRow}>
                 <View style={styles.stepIndex}><Text style={styles.stepIndexText}>{index + 1}</Text></View>
                 <Text style={styles.stepText}>{step}</Text>
-                <Ionicons name={index < 2 ? 'checkmark-circle' : 'ellipsis-horizontal-circle'} size={18} color={index < 2 ? '#35C792' : '#A998F4'} />
+                <Ionicons name={index < 2 ? 'checkmark-circle' : 'ellipsis-horizontal-circle'} size={18} color={index < 2 ? Colors.success : Colors.accentLight} />
               </Animated.View>
             ))}
           </View>
@@ -80,19 +80,19 @@ export default function InterviewSimulationOverlay({ visible = true, phase, role
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: 'rgba(12, 10, 31, 0.84)' },
-  panel: { width: '100%', maxWidth: 360, gap: 16, borderRadius: 28, borderCurve: 'continuous', borderWidth: 1, borderColor: 'rgba(185,170,255,0.35)', backgroundColor: '#17132D', padding: 24, boxShadow: '0 24px 60px rgba(0,0,0,0.34)' },
+  panel: { width: '100%', maxWidth: 360, gap: 16, borderRadius: 28, borderCurve: 'continuous', borderWidth: 1, borderColor: 'rgba(185,170,255,0.35)', backgroundColor: Colors.panelDark, padding: 24, boxShadow: '0 24px 60px rgba(0,0,0,0.34)' },
   liveRow: { alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 8, borderRadius: 999, backgroundColor: 'rgba(112,71,245,0.18)', paddingHorizontal: 12, paddingVertical: 7 },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#5BE0AC' },
-  liveText: { color: '#D9D1FF', fontSize: 9, fontWeight: '900', letterSpacing: 1.15 },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: Colors.success },
+  liveText: { color: Colors.accentLight, fontSize: 9, fontWeight: '900', letterSpacing: 1.15 },
   scanner: { width: 92, height: 92, alignSelf: 'center', alignItems: 'center', justifyContent: 'center' },
-  orbit: { position: 'absolute', width: 92, height: 92, borderRadius: 46, borderWidth: 1.5, borderColor: '#8266F4', backgroundColor: 'rgba(112,71,245,0.08)' },
-  scannerCore: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: '#7047F5' },
+  orbit: { position: 'absolute', width: 92, height: 92, borderRadius: 46, borderWidth: 1.5, borderColor: Colors.primaryLight, backgroundColor: 'rgba(79,70,229,0.08)' },
+  scannerCore: { width: 62, height: 62, borderRadius: 31, alignItems: 'center', justifyContent: 'center', backgroundColor: Colors.primary },
   title: { color: '#FFFFFF', fontSize: 23, lineHeight: 29, fontWeight: '900', textAlign: 'center' },
-  description: { color: '#BDB7D2', fontSize: 13, lineHeight: 20, textAlign: 'center' },
+  description: { color: Colors.textOnDarkMuted, fontSize: 13, lineHeight: 20, textAlign: 'center' },
   steps: { gap: 8 },
   stepRow: { minHeight: 46, flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.055)', paddingHorizontal: 11 },
   stepIndex: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(169,152,244,0.16)' },
-  stepIndexText: { color: '#D9D1FF', fontSize: 10, fontWeight: '900' },
-  stepText: { flex: 1, color: '#F4F1FF', fontSize: 12, fontWeight: '700' },
-  note: { color: '#8F89A5', fontSize: 10, lineHeight: 15, textAlign: 'center' },
+  stepIndexText: { color: Colors.accentLight, fontSize: 10, fontWeight: '900' },
+  stepText: { flex: 1, color: Colors.textOnDark, fontSize: 12, fontWeight: '700' },
+  note: { color: Colors.textOnDarkMuted, fontSize: 10, lineHeight: 15, textAlign: 'center' },
 });

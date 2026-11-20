@@ -1,246 +1,56 @@
 import React from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
-import ViewShot from 'react-native-view-shot';
-import { Colors, FontSizes, Radius, Spacing } from '../../constants/theme';
-import ScoreRing from './ScoreRing';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 
-const getGrade = (score = 0) => {
-  if (score >= 9) return { label: 'Outstanding', tone: Colors.success };
-  if (score >= 7.5) return { label: 'Strong', tone: Colors.primaryLight || Colors.primary };
-  if (score >= 5) return { label: 'Good progress', tone: Colors.warning };
-  return { label: 'Keep improving', tone: Colors.error };
-};
+import { Colors, Radius, Shadows, Spacing } from '../../constants/theme';
 
-const Metric = ({ label, value }) => (
-  <View style={styles.metricItem}>
-    <Text style={styles.metricValue}>{value ?? '—'}</Text>
-    <Text style={styles.metricLabel}>{label}</Text>
-  </View>
-);
+/**
+ * Card — the generic design-system card container.
+ *
+ * This file previously (accidentally) contained a copy of ShareCard, which
+ * ignores `children`/`style`/`padding` — so screens that used <Card> as a
+ * container (e.g. the Question Bank) silently rendered a share-image card
+ * instead of their content. This is now the plain white card container those
+ * screens expect.
+ *
+ * Props:
+ *   children : ReactNode
+ *   style    : additional style for the card
+ *   padding  : 'none' | 'sm' | 'md' | 'lg'   (default 'md')
+ *   variant  : 'default' | 'error'           (error = red tinted border/background)
+ *   onPress  : if provided, the card becomes touchable
+ */
+export default function Card({ children, style, padding = 'md', variant = 'default', onPress }) {
+  const paddings = {
+    none: 0,
+    sm: Spacing.sm,
+    md: Spacing.md,
+    lg: Spacing.lg,
+  };
+  const pad = paddings[padding] !== undefined ? paddings[padding] : paddings.md;
 
-const ShareCard = ({ feedback = {}, role = 'Interview practice', forwardedRef }) => {
-  const rating = Number(feedback.rating) || 0;
-  const maxRating = Number(feedback.rating_max) || 10;
-  const grade = getGrade(rating);
+  const baseStyle = [styles.card, { padding: pad }, variant === 'error' && styles.cardError, style];
 
-  return (
-    <ViewShot
-      ref={forwardedRef}
-      options={{ format: 'jpg', quality: 1 }}
-      style={styles.captureSurface}
-    >
-      <View style={styles.card}>
-        <View style={styles.ambientTop} />
-        <View style={styles.ambientBottom} />
+  if (onPress) {
+    return (
+      <TouchableOpacity activeOpacity={0.85} onPress={onPress} style={baseStyle}>
+        {children}
+      </TouchableOpacity>
+    );
+  }
 
-        <View style={styles.header}>
-          <View style={styles.brandCopy}>
-            <Image source={require('../../assets/logo.png')} resizeMode="contain" style={styles.logoImage} />
-            <Text style={styles.headerSub}>AI interview coach</Text>
-          </View>
-          <View style={styles.resultPill}>
-            <View style={[styles.resultDot, { backgroundColor: grade.tone }]} />
-            <Text style={styles.resultPillText}>RESULT</Text>
-          </View>
-        </View>
-
-        <View style={styles.heroSection}>
-          <ScoreRing score={rating} maxScore={maxRating} size={132} strokeWidth={10} />
-          <View style={styles.heroCopy}>
-            <Text style={styles.eyebrow}>INTERVIEW PERFORMANCE</Text>
-            <Text style={[styles.gradeLabel, { color: grade.tone }]}>{grade.label}</Text>
-            <Text style={styles.encouragement}>
-              Focused practice is turning into stronger, clearer answers.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.roleCard}>
-          <Text style={styles.roleLabel}>TARGET ROLE</Text>
-          <Text style={styles.roleText} numberOfLines={2}>{role}</Text>
-        </View>
-
-        <View style={styles.metricsCard}>
-          <Metric label="Structure" value={feedback.structure_score} />
-          <View style={styles.divider} />
-          <Metric label="Content" value={feedback.content_score} />
-          <View style={styles.divider} />
-          <Metric label="Clarity" value={feedback.communication_score} />
-        </View>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Practice smarter. Interview stronger.</Text>
-          <Text style={styles.footerUrl}>hirely.app</Text>
-        </View>
-      </View>
-    </ViewShot>
-  );
-};
+  return <View style={baseStyle}>{children}</View>;
+}
 
 const styles = StyleSheet.create({
-  captureSurface: {
-    backgroundColor: Colors.bgSecondary,
-    padding: 12,
-  },
   card: {
-    width: 360,
-    overflow: 'hidden',
-    position: 'relative',
-    borderRadius: 28,
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    backgroundColor: Colors.bgPrimary,
-    padding: Spacing.xl,
+    ...Shadows.small,
   },
-  ambientTop: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: `${Colors.primary}18`,
-    top: -100,
-    right: -80,
-  },
-  ambientBottom: {
-    position: 'absolute',
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-    bottom: -90,
-    left: -70,
-  },
-  header: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    marginBottom: Spacing.xl,
-  },
-  brandCopy: {
-    flex: 1,
-  },
-  logoImage: { width: 100, height: 34 },
-  headerSub: {
-    color: Colors.textMuted,
-    fontSize: FontSizes.xs,
-    marginTop: 2,
-  },
-  resultPill: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    gap: 6,
-    borderRadius: Radius.full,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bgElevated,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  resultDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  resultPillText: {
-    color: Colors.textSecondary,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1.1,
-  },
-  heroSection: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    marginBottom: Spacing.xl,
-  },
-  heroCopy: {
-    flex: 1,
-    marginLeft: Spacing.lg,
-  },
-  eyebrow: {
-    color: Colors.textMuted,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  gradeLabel: {
-    fontSize: FontSizes.xl,
-    fontWeight: '900',
-    letterSpacing: -0.6,
-    marginTop: Spacing.xs,
-  },
-  encouragement: {
-    color: Colors.textSecondary,
-    fontSize: FontSizes.xs,
-    lineHeight: 18,
-    marginTop: Spacing.sm,
-  },
-  roleCard: {
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bgElevated,
-    padding: Spacing.md,
-    marginBottom: Spacing.md,
-  },
-  roleLabel: {
-    color: Colors.textMuted,
-    fontSize: 9,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  roleText: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.md,
-    fontWeight: '800',
-    marginTop: 5,
-  },
-  metricsCard: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    borderRadius: Radius.lg,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.bgCard,
-    paddingVertical: Spacing.lg,
-  },
-  metricItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  metricValue: {
-    color: Colors.textPrimary,
-    fontSize: FontSizes.xl,
-    fontWeight: '900',
-  },
-  metricLabel: {
-    color: Colors.textMuted,
-    fontSize: 9,
-    fontWeight: '700',
-    marginTop: 4,
-    textTransform: 'uppercase',
-  },
-  divider: {
-    width: 1,
-    height: 34,
-    backgroundColor: Colors.border,
-  },
-  footer: {
-    alignItems: 'center',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    marginTop: Spacing.lg,
-    paddingTop: Spacing.md,
-  },
-  footerText: {
-    color: Colors.textMuted,
-    fontSize: FontSizes.xs,
-  },
-  footerUrl: {
-    color: Colors.primaryLight || Colors.primary,
-    fontSize: FontSizes.xs,
-    fontWeight: '800',
+  cardError: {
+    borderColor: Colors.error,
+    backgroundColor: Colors.errorBg,
   },
 });
-
-export default ShareCard;
