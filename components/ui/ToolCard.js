@@ -7,90 +7,66 @@ import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/the
 /**
  * ToolCard
  *
- * A card on the Home / Tools grid. Icon + title + description.
+ * Vertical card for the 2-column tool grids (Home + Tools). Every tool has
+ * its own accent color (icon tile tint + matching top strip) so the grid
+ * feels varied rather than one brand color repeated everywhere.
  *
  * Layout contract (keeps every card in the grid exactly the same height):
- *   Row 1: icon (40) — [coming-soon chip, right-aligned]
+ *   Row 1: icon tile (44) with a 3pt accent strip on top
  *   Row 2: title    (up to 2 lines, fixed lineHeight)
  *   Row 3: desc     (up to 2 lines, fixed lineHeight)
- * The card uses minHeight (never a fixed height) so nothing is ever
- * clipped, and because every card renders the same three rows with the
- * same line counts, auto-height is identical across the grid.
+ * minHeight (never fixed height) so nothing is ever clipped, and because
+ * every card renders the same rows, auto-height is identical across the
+ * grid.
  *
- * Variants:
- *   - default    : white card with subtle shadow, purple icon background
- *   - featured   : indigo card with white text (used for primary CTA tools)
- *   - comingSoon : muted card with a "Coming soon" chip next to the icon
+ * Coming-soon tools are NOT rendered with this card — they use the quieter
+ * ComingSoonRow list.
+ *
+ * Props: title, description, icon, accent, accentBg, onPress
  */
 export default function ToolCard({
   title,
   description,
   icon = 'cube-outline',
+  accent,
+  accentBg,
   onPress,
-  featured = false,
-  comingSoon = false,
 }) {
-  const isDisabled = comingSoon || !onPress;
-
-  const Wrapper = isDisabled ? View : TouchableOpacity;
+  const tileBg = accentBg || Colors.primaryBg;
+  const iconColor = accent || Colors.primary;
 
   return (
-    <Wrapper
-      style={[
-        styles.card,
-        featured && styles.cardFeatured,
-        comingSoon && styles.cardDisabled,
-      ]}
-      onPress={isDisabled ? undefined : onPress}
+    <TouchableOpacity
+      style={styles.card}
+      onPress={onPress}
       activeOpacity={0.85}
     >
-      {featured ? <View style={styles.featuredOverlay} pointerEvents="none" /> : null}
+      <View style={[styles.accentStrip, { backgroundColor: iconColor }]} />
 
-      <View style={styles.iconRow}>
-        <View
-          style={[
-            styles.iconWrap,
-            featured && styles.iconWrapFeatured,
-            comingSoon && styles.iconWrapDisabled,
-          ]}
-        >
-          <Ionicons
-            name={icon}
-            size={22}
-            color={featured ? '#FFFFFF' : Colors.primary}
-          />
+      <View style={styles.iconTileWrap}>
+        <View style={[styles.iconTile, { backgroundColor: tileBg }]}>
+          <Ionicons name={icon} size={22} color={iconColor} />
         </View>
-
-        {comingSoon ? (
-          <View style={styles.comingSoonBadge}>
-            <Text style={styles.comingSoonText}>Coming soon</Text>
-          </View>
-        ) : null}
+        <Ionicons
+          name="arrow-forward"
+          size={14}
+          color={Colors.textMuted}
+          style={styles.miniArrow}
+        />
       </View>
 
       <View style={{ flex: 1, marginTop: Spacing.sm }}>
-        <View style={styles.titleRow}>
-          <Text
-            style={[styles.title, featured && styles.titleFeatured]}
-            numberOfLines={2}
-          >
-            {title}
-          </Text>
-          {!comingSoon && !featured ? (
-            <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
-          ) : null}
-        </View>
+        <Text style={styles.title} numberOfLines={2}>
+          {title}
+        </Text>
 
         {description ? (
-          <Text
-            style={[styles.description, featured && styles.descriptionFeatured]}
-            numberOfLines={2}
-          >
+          <Text style={styles.description} numberOfLines={2}>
             {description}
           </Text>
         ) : null}
       </View>
-    </Wrapper>
+    </TouchableOpacity>
   );
 }
 
@@ -98,91 +74,54 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
-    padding: Spacing.md,
+    paddingRight: Spacing.md,
+    paddingBottom: Spacing.md,
+    paddingTop: 0,
     // minHeight (not height) guarantees equal-height cards across the grid
-    // (every card renders the same 3 rows) while never clipping content —
-    // the previous fixed height:148 cut off the "Coming soon" badge and the
-    // second description line on dense cards.
+    // (every card renders the same rows) while never clipping content.
     minHeight: 148,
     borderWidth: 1,
     borderColor: Colors.border,
+    overflow: 'hidden',
     ...Shadows.small,
   },
-  cardFeatured: {
-    backgroundColor: Colors.gradientStart,
-    borderColor: 'transparent',
-    ...Shadows.primary,
+  // 3pt colored strip along the card's top edge — subtle per-tool identity
+  accentStrip: {
+    height: 3,
+    marginLeft: -1,
+    marginRight: -1,
+    marginTop: -1,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    opacity: 0.9,
   },
-  // RN has no CSS backgroundImage; approximate the brand gradient the same
-  // way GradientHero does — a solid indigo base plus a soft radial overlay.
-  featuredOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255, 255, 255, 0.10)',
-    borderTopRightRadius: Radius.xl,
-    borderBottomLeftRadius: Radius.lg,
-    opacity: 0.5,
-  },
-  cardDisabled: {
-    backgroundColor: Colors.bgElevated,
-    borderColor: Colors.border,
-  },
-  iconRow: {
+  iconTileWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 40,
+    paddingTop: Spacing.md,
   },
-  iconWrap: {
-    width: 40,
-    height: 40,
+  iconTile: {
+    width: 44,
+    height: 44,
     borderRadius: Radius.md,
-    backgroundColor: Colors.primaryBg,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconWrapFeatured: {
-    backgroundColor: 'rgba(255, 255, 255, 0.20)',
-  },
-  iconWrapDisabled: {
-    backgroundColor: '#FFFFFF',
-    opacity: 0.6,
-  },
-  comingSoonBadge: {
-    backgroundColor: Colors.warningBg,
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 3,
-    borderRadius: Radius.sm,
-  },
-  comingSoonText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.warning,
-    letterSpacing: 0.3,
-    textTransform: 'uppercase',
-  },
-  titleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
+  miniArrow: {
+    opacity: 0.7,
   },
   title: {
     fontSize: FontSizes.md,
     fontWeight: '700',
     color: Colors.textPrimary,
-    flex: 1,
     lineHeight: 19,
-  },
-  titleFeatured: {
-    color: '#FFFFFF',
+    letterSpacing: -0.1,
   },
   description: {
     fontSize: FontSizes.xs,
     color: Colors.textMuted,
-    marginTop: 2,
+    marginTop: 3,
     lineHeight: 15,
-  },
-  descriptionFeatured: {
-    color: 'rgba(255, 255, 255, 0.80)',
   },
 });

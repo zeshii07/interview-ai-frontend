@@ -1,8 +1,8 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows, Typography } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation, Glass, Gradients, Typography } from '../../constants/theme';
 
 /**
  * GradientHero
@@ -34,9 +34,14 @@ export default function GradientHero({ title, subtitle, icon, onIconPress, child
           </View>
 
           {icon ? (
-            <View style={styles.iconButton}>
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={onIconPress}
+              activeOpacity={0.8}
+              disabled={!onIconPress}
+            >
               <Ionicons name={icon} size={20} color={Colors.textOnDark} />
-            </View>
+            </TouchableOpacity>
           ) : null}
         </View>
 
@@ -52,12 +57,12 @@ export default function GradientHero({ title, subtitle, icon, onIconPress, child
 
 const styles = StyleSheet.create({
   hero: {
-    backgroundColor: Colors.gradientStart,
+    ...Gradients.hero, // solid indigo base + experimental gradient image
     borderBottomLeftRadius: Radius.xxl,
     borderBottomRightRadius: Radius.xxl,
     overflow: 'hidden',
     paddingBottom: Spacing.lg,
-    ...Shadows.large,
+    ...Elevation.glowPrimary,
   },
   heroContent: {
     paddingHorizontal: Spacing.lg,
@@ -83,10 +88,12 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   iconButton: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: Radius.full,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    backgroundColor: Glass.fillOnDark,
+    borderWidth: 1,
+    borderColor: Glass.hairlineOnDark,
     alignItems: 'center',
     justifyContent: 'center',
   },

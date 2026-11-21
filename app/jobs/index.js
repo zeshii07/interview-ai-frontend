@@ -560,7 +560,8 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: Spacing.md,
-    paddingBottom: Spacing.xxl,
+    // extra room so content clears the floating tab bar
+    paddingBottom: Spacing.xxl + 52,
   },
   resultsCount: {
     fontSize: FontSizes.xs,

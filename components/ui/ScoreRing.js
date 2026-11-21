@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Colors, FontSizes, Spacing } from '../../constants/theme';
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
@@ -27,6 +27,12 @@ const ScoreRing = ({ score = 0, maxScore = 10, size = 120, strokeWidth = 9 }) =>
       accessibilityLabel={`Score ${safeScore} out of ${safeMax}`}
     >
       <Svg width={size} height={size} style={styles.svg} importantForAccessibility="no">
+        <Defs>
+          <LinearGradient id="scoreRingStroke" x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={Colors.gradientStart} />
+            <Stop offset="1" stopColor={Colors.gradientEnd} />
+          </LinearGradient>
+        </Defs>
         <Circle
           cx={size / 2}
           cy={size / 2}
@@ -39,7 +45,7 @@ const ScoreRing = ({ score = 0, maxScore = 10, size = 120, strokeWidth = 9 }) =>
           cx={size / 2}
           cy={size / 2}
           r={radius}
-          stroke={strokeColor}
+          stroke="url(#scoreRingStroke)"
           strokeWidth={strokeWidth}
           fill="transparent"
           strokeDasharray={`${circumference} ${circumference}`}

@@ -239,3 +239,82 @@ export const Typography = {
     lineHeight: 20,
   },
 };
+
+/**
+ * Elevation — the v3 "premium kit" depth system (uistore-style).
+ *
+ * The difference between a flat app and a polished one is almost entirely
+ * DEPTH and LIGHT: colored glows under primary surfaces, diffuse shadows
+ * under white cards, and glassy hairlines on top edges. These tiers give
+ * every component a consistent vocabulary:
+ *
+ *   card      — white surfaces resting on the screen (soft, diffuse)
+ *   raised    — white surfaces the user can act on (cards in motion)
+ *   overlay   — modals / floating bars (highest neutral depth)
+ *   glowPrimary / glowAccent — brand-colored glow under gradient surfaces
+ *   glowSuccess / glowError  — semantic glows for score / alert surfaces
+ */
+export const Elevation = {
+  card: {
+    shadowColor: '#312E81', // indigo-950 — neutral-cool shadow tint
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  raised: {
+    shadowColor: '#312E81',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  overlay: {
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.22,
+    shadowRadius: 28,
+    elevation: 12,
+  },
+  glowPrimary: {
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.38,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  glowAccent: {
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 8,
+  },
+  glowSuccess: {
+    shadowColor: '#10B981',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.30,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  glowError: {
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+};
+
+/**
+ * Glass — translucent hairline + fill used to give dark gradient surfaces
+ * (heroes, dark panels) a premium frosted edge, and light surfaces a
+ * crisp top highlight.
+ */
+export const Glass = {
+  hairlineOnDark: 'rgba(255, 255, 255, 0.18)',
+  fillOnDark: 'rgba(255, 255, 255, 0.12)',
+  fillOnDarkStrong: 'rgba(255, 255, 255, 0.20)',
+  hairlineOnLight: 'rgba(255, 255, 255, 0.85)',
+  scrim: 'rgba(15, 23, 42, 0.45)',
+};

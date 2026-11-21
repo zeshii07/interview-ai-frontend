@@ -20,13 +20,21 @@ import useInterviewStore from '../../store/interviewStore';
 import GradientHero from '../../components/ui/GradientHero';
 import StatCard from '../../components/ui/StatCard';
 import ToolCard from '../../components/ui/ToolCard';
+import WideToolCard from '../../components/ui/WideToolCard';
+import ComingSoonRow from '../../components/ui/ComingSoonRow';
+import HeroToolCard from '../../components/ui/HeroToolCard';
 import SectionHeader from '../../components/ui/SectionHeader';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import JobCard from '../../components/jobs/JobCard';
 import SlowNetworkBanner from '../../components/ui/SlowNetworkBanner';
 import ErrorState from '../../components/ui/ErrorState';
-import { getHomePrimaryTools, getHomeComingSoonTools } from '../../constants/tools';
+import {
+  getHomeHeroTool,
+  getHomeGridTools,
+  getHomeWideTool,
+  getHomeComingSoonTools,
+} from '../../constants/tools';
 
 export default function HomeScreen() {
   const user = getCurrentUser();
@@ -201,7 +209,7 @@ export default function HomeScreen() {
           onIconPress={() => router.push('/(tabs)/profile')}
         />
 
-        {/* Tools grid */}
+        {/* Tools — hero card + tinted grid + slim wide card + coming-soon list */}
         <SectionHeader
           title="Your Career Tools"
           icon="grid-outline"
@@ -209,31 +217,64 @@ export default function HomeScreen() {
           onActionPress={() => router.push('/(tabs)/tools')}
         />
 
+        {(() => {
+          const hero = getHomeHeroTool();
+          if (!hero) return null;
+          return (
+            <View style={styles.heroWrap}>
+              <HeroToolCard
+                title={hero.title}
+                description={hero.description}
+                icon={hero.icon}
+                badge="AI powered"
+                onPress={() => router.push(hero.route)}
+              />
+            </View>
+          );
+        })()}
+
         <View style={styles.toolsGrid}>
-          {getHomePrimaryTools().map((tool) => (
+          {getHomeGridTools().map((tool) => (
             <View key={tool.id} style={styles.toolCardWrap}>
               <ToolCard
                 title={tool.shortTitle}
                 description={tool.description}
                 icon={tool.icon}
-                featured={tool.featured}
+                accent={tool.accent}
+                accentBg={tool.accentBg}
                 onPress={() => router.push(tool.route)}
               />
             </View>
           ))}
         </View>
 
-        {/* Secondary tools (Coming Soon) */}
-        <View style={styles.secondaryToolsRow}>
-          {getHomeComingSoonTools().map((tool) => (
-            <View key={tool.id} style={styles.secondaryTool}>
-              <ToolCard
-                title={tool.shortTitle}
-                description={tool.description}
-                icon={tool.icon}
-                comingSoon
+        {(() => {
+          const wide = getHomeWideTool();
+          if (!wide) return null;
+          return (
+            <View style={styles.wideToolWrap}>
+              <WideToolCard
+                title={wide.title}
+                description={wide.description}
+                icon={wide.icon}
+                accent={wide.accent}
+                accentBg={wide.accentBg}
+                onPress={() => router.push(wide.route)}
               />
             </View>
+          );
+        })()}
+
+        {/* Coming soon — quiet compact rows */}
+        <View style={styles.comingSoonCard}>
+          {getHomeComingSoonTools().map((tool) => (
+            <ComingSoonRow
+              key={tool.id}
+              title={tool.title}
+              icon={tool.icon}
+              accent={tool.accent}
+              accentBg={tool.accentBg}
+            />
           ))}
         </View>
 
@@ -318,33 +359,42 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPrimary,
   },
   scrollContent: {
-    paddingBottom: Spacing.xxl,
+    // extra room so content clears the floating tab bar
+    paddingBottom: Spacing.xxl + 52,
   },
   toolsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     paddingHorizontal: Spacing.md,
-    // SPRINT 3.2 FIX: removed `alignItems: 'stretch'` (was breaking 2-column
-    // layout — see app/(tabs)/tools.js for the full explanation).
+    // No `alignItems: 'stretch'` — on a `flexWrap: 'wrap'` container it
+    // overrides the children's cross-axis size and stretches every card to
+    // full row width (breaks the 2-column layout — see tools.js).
     justifyContent: 'space-between',
     rowGap: Spacing.sm,
+    marginTop: Spacing.sm,
   },
   toolCardWrap: {
-    // SPRINT 3.2 FIX: use flexBasis for reliable 2-column layout.
+    // flexBasis (not width %) works reliably with flexWrap: 'wrap' to keep
+    // exactly 2 cards per row on every screen size.
     flexBasis: '48%',
     flexGrow: 0,
     flexShrink: 0,
   },
-  // 2-column layout — each card takes ~half width minus gap
-  // We render ToolCards with explicit width via flexBasis
-  secondaryToolsRow: {
-    flexDirection: 'row',
+  heroWrap: {
     paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+  },
+  wideToolWrap: {
+    paddingHorizontal: Spacing.md,
     marginTop: Spacing.sm,
   },
-  secondaryTool: {
-    flex: 1,
+  comingSoonCard: {
+    backgroundColor: Colors.bgCard,
+    borderRadius: Radius.lg,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.sm,
+    paddingVertical: Spacing.xs,
   },
   sectionSpacing: {
     paddingHorizontal: Spacing.md,
@@ -399,8 +449,14 @@ const styles = StyleSheet.create({
     height: 44,
     borderRadius: Radius.md,
     backgroundColor: Colors.gradientStart,
+    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.30,
+    shadowRadius: 12,
+    elevation: 5,
   },
   practiceTitle: {
     fontSize: FontSizes.md,

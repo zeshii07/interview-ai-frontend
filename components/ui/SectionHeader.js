@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation } from '../../constants/theme';
 
 /**
  * SectionHeader
@@ -63,10 +63,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconWrap: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     borderRadius: Radius.sm,
     backgroundColor: Colors.primaryBg,
+    borderWidth: 1,
+    borderColor: 'rgba(79, 70, 229, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },

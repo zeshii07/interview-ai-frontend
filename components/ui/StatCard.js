@@ -1,15 +1,19 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Svg, { Circle, Defs, LinearGradient, Stop } from 'react-native-svg';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation, Glass, Gradients } from '../../constants/theme';
 
 /**
  * StatCard
  *
- * The dark hero panel used on the Home screen for the "Interview Readiness"
- * score. Mimics the mockup's dark panel (#1E1B44B) with radial accent
- * overlays + a centered score ring + secondary stats + action buttons.
+ * The dark hero panel used on the Home screen for the "Interview
+ * Readiness" score. Premium-kit treatment:
+ *   - darkPanel gradient background + two soft radial accent overlays
+ *   - a REAL progress ring (gradient stroke on a translucent white track)
+ *     instead of a flat bordered circle
+ *   - glassy hairline action buttons + a status pill with tinted dot
  *
  * Props:
  *   score             : number | null          — null renders "N/A"
@@ -17,9 +21,9 @@ import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/the
  *   interviewsCount   : number
  *   hint              : string                 — text shown when score is N/A
  *   onInsightsPress   : () => void
- *   onSharePress       : () => void
+ *   onSharePress      : () => void
  *   insightsLabel     : string                 — default "AI Insights"
- *   shareLabel         : string                 — default "Share Score"
+ *   shareLabel        : string                 — default "Share Score"
  */
 export default function StatCard({
   score = null,
@@ -33,12 +37,22 @@ export default function StatCard({
 }) {
   const hasScore = typeof score === 'number' && !Number.isNaN(score);
   const displayScore = hasScore ? score.toFixed(1) : 'N/A';
-
-  // Ring math — circumference = 2πr; show progress as score / maxScore
-  const radius = 56;
-  const stroke = 8;
-  const circumference = 2 * Math.PI * radius;
   const progress = hasScore ? Math.max(0, Math.min(score / maxScore, 1)) : 0;
+
+  // Ring geometry
+  const ringSize = 116;
+  const strokeWidth = 9;
+  const radius = (ringSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference * (1 - progress);
+
+  const ringTint = hasScore
+    ? progress >= 0.7
+      ? Colors.success
+      : progress >= 0.4
+        ? Colors.warning
+        : Colors.error
+    : 'rgba(255, 255, 255, 0.35)';
 
   return (
     <View style={styles.card}>
@@ -52,30 +66,60 @@ export default function StatCard({
             {interviewsCount} {interviewsCount === 1 ? 'interview' : 'interviews'} completed
           </Text>
         </View>
-        <Ionicons name="analytics-outline" size={20} color={Colors.textOnDarkMuted} />
+        <View style={styles.headerIcon}>
+          <Ionicons name="analytics-outline" size={18} color="rgba(255, 255, 255, 0.85)" />
+        </View>
       </View>
 
       <View style={styles.scoreRow}>
-        {/* Score ring — approximated with overlapping circles since RN doesn't
-            have native conic gradients; we use SVG in the parent screen for a
-            proper animated ring. Here we just show the number for clarity. */}
-        <View style={styles.scoreWrap}>
-          <View style={styles.scoreRing}>
-            <Text style={styles.scoreNumber}>{displayScore}</Text>
-            {hasScore ? <Text style={styles.scoreMax}>/{maxScore}</Text> : null}
+        <View style={styles.ringWrap}>
+          <Svg width={ringSize} height={ringSize}>
+            <Defs>
+              <LinearGradient id="statRingGradient" x1="0" y1="0" x2="1" y2="1">
+                <Stop offset="0" stopColor={ringTint} />
+                <Stop offset="1" stopColor="rgba(255, 255, 255, 0.55)" />
+              </LinearGradient>
+            </Defs>
+            <Circle
+              cx={ringSize / 2}
+              cy={ringSize / 2}
+              r={radius}
+              stroke="rgba(255, 255, 255, 0.10)"
+              strokeWidth={strokeWidth}
+              fill="transparent"
+            />
+            <Circle
+              cx={ringSize / 2}
+              cy={ringSize / 2}
+              r={radius}
+              stroke="url(#statRingGradient)"
+              strokeWidth={strokeWidth}
+              fill="transparent"
+              strokeDasharray={`${circumference} ${circumference}`}
+              strokeDashoffset={strokeDashoffset}
+              strokeLinecap="round"
+              transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`}
+            />
+          </Svg>
+          <View style={styles.ringContent}>
+            <View style={styles.scoreRowInner}>
+              <Text style={styles.scoreNumber}>{displayScore}</Text>
+              {hasScore ? <Text style={styles.scoreMax}>/{maxScore}</Text> : null}
+            </View>
+            <Text style={styles.ringCaption}>
+              {hasScore ? `${Math.round(progress * 100)}%` : 'No data'}
+            </Text>
           </View>
-          {!hasScore ? <View style={styles.scorePlaceholder} /> : null}
         </View>
 
         <View style={styles.scoreRight}>
           {hasScore ? (
             <>
-              <Text style={styles.scoreLabel}>
-                {getScoreLabel(score)}
-              </Text>
-              <Text style={styles.scoreDesc}>
-                {getScoreDescription(score)}
-              </Text>
+              <View style={styles.scorePill}>
+                <View style={[styles.scorePillDot, { backgroundColor: ringTint }]} />
+                <Text style={styles.scorePillText}>{getScoreLabel(score)}</Text>
+              </View>
+              <Text style={styles.scoreDesc}>{getScoreDescription(score)}</Text>
             </>
           ) : (
             <>
@@ -125,12 +169,14 @@ function getScoreDescription(score) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.panelDark,
+    ...Gradients.darkPanel,
     borderRadius: Radius.xl,
     padding: Spacing.lg,
     overflow: 'hidden',
     position: 'relative',
-    ...Shadows.large,
+    borderWidth: 1,
+    borderColor: Glass.hairlineOnDark,
+    ...Elevation.glowAccent,
   },
   overlay1: {
     position: 'absolute',
@@ -157,6 +203,16 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.md,
     zIndex: 2,
   },
+  headerIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: Glass.fillOnDark,
+    borderWidth: 1,
+    borderColor: Glass.hairlineOnDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   eyebrow: {
     fontSize: FontSizes.xs,
     fontWeight: '700',
@@ -176,43 +232,65 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     zIndex: 2,
   },
-  scoreWrap: {
-    width: 112,
-    height: 112,
-    borderRadius: 56,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  ringWrap: {
+    width: 116,
+    height: 116,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.lg,
-    borderWidth: 8,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
   },
-  scoreRing: {
+  ringContent: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scoreRowInner: {
     flexDirection: 'row',
     alignItems: 'baseline',
   },
   scoreNumber: {
-    fontSize: FontSizes.xxxl,
+    fontSize: FontSizes.xxl,
     fontWeight: '800',
     color: '#FFFFFF',
   },
   scoreMax: {
-    fontSize: FontSizes.md,
+    fontSize: FontSizes.sm,
     color: 'rgba(255, 255, 255, 0.72)',
     fontWeight: '600',
   },
-  scorePlaceholder: {
-    width: 8,
-    height: 8,
+  ringCaption: {
+    fontSize: FontSizes.xs,
+    fontWeight: '700',
+    color: 'rgba(255, 255, 255, 0.60)',
+    letterSpacing: 0.4,
+    marginTop: 1,
   },
   scoreRight: {
     flex: 1,
   },
-  scoreLabel: {
-    fontSize: FontSizes.lg,
+  scorePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingHorizontal: Spacing.sm + 2,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+    backgroundColor: 'rgba(255, 255, 255, 0.10)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.14)',
+    marginBottom: Spacing.sm,
+  },
+  scorePillDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  scorePillText: {
+    fontSize: FontSizes.xs,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
+    letterSpacing: 0.3,
   },
   scoreDesc: {
     fontSize: FontSizes.sm,
@@ -246,6 +324,8 @@ const styles = StyleSheet.create({
   },
   actionPrimary: {
     backgroundColor: 'rgba(255, 255, 255, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.22)',
   },
   actionPrimaryText: {
     fontSize: FontSizes.sm,

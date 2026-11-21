@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation } from '../../constants/theme';
 
 /**
  * WizardStepper — horizontal progress dots at top of the Resume Generator.
@@ -94,13 +94,15 @@ const styles = StyleSheet.create({
     borderColor: Colors.bgElevated,
   },
   dotCurrent: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-    ...Shadows.primary,
+    backgroundColor: Colors.gradientStart,
+    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+    borderColor: 'transparent',
+    ...Elevation.glowPrimary,
   },
   dotCompleted: {
     backgroundColor: Colors.success,
-    borderColor: Colors.success,
+    borderColor: 'transparent',
+    ...Elevation.glowSuccess,
   },
   dotLocked: {
     backgroundColor: Colors.bgElevated,

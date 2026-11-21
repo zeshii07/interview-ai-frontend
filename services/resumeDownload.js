@@ -6,6 +6,11 @@ import * as NewFileSystem from 'expo-file-system';
 import { buildResumePdfBytes } from './localResumePdf';
 import { buildResumeDocBytes, buildResumeDocFilename } from './localResumeDocx';
 import { bytesToBase64 } from '../utils/bytes';
+import {
+  loadExportDirectory,
+  saveExportDirectory,
+  clearExportDirectory,
+} from '../utils/storage';
 
 /**
  * Resume download / save pipeline.
@@ -21,12 +26,18 @@ import { bytesToBase64 } from '../utils/bytes';
  *    IMPORTANT: `writeAsStringAsync` imported from 'expo-file-system' (the
  *    main entry) THROWS in SDK 54+ — it must come from the /legacy subpath.
  *
- * 2. SAVING — on Android the user gets a real "Save to Downloads" action
- *    (StorageAccessFramework directory picker) in addition to the share
- *    sheet, so the file genuinely lands somewhere visible. On iOS the share
- *    sheet (which contains "Save to Files") opens directly.
+ * 2. SAVING (Android) — the user picks a folder ONCE (the picker opens
+ *    pre-selected on the system Download folder). Expo's SAF request takes
+ *    a PERSISTABLE grant, so the folder URI is remembered in AsyncStorage
+ *    and every later download writes there DIRECTLY — no folder picker, no
+ *    "create a new folder" step again. If the grant is ever revoked
+ *    (folder deleted / app data cleared), we silently forget it and ask
+ *    once more.
  *
- * 3. MIME TYPES — .pdf gets application/pdf; the Word document gets
+ * 3. SAVING (iOS) — the share sheet opens directly (it contains
+ *    "Save to Files").
+ *
+ * 4. MIME TYPES — .pdf gets application/pdf; the Word document gets
  *    application/msword (it is a Word-HTML .doc). A wrong MIME type makes
  *    Android share targets silently reject the file — that was the "pressed
  *    save and share, nothing was saved" bug.
@@ -80,25 +91,10 @@ async function writeCacheFile(bytes, filename) {
   throw new Error('No file system API available on this device.');
 }
 
-/**
- * Android: let the user pick a folder (defaults to Downloads) and write the
- * file into it via the Storage Access Framework. The saved file is visible
- * to the system Files app and every other app.
- *
- * Returns the saved file URI, or null if the user cancelled / denied.
- */
-async function saveToPickedFolder(base64, filename, mimeType) {
-  if (!LegacyFileSystem.StorageAccessFramework) {
-    return null;
-  }
-  const permissions =
-    await LegacyFileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync();
-  if (!permissions.granted) {
-    return null;
-  }
-
+/** Write base64 bytes into `dirUri` via SAF. */
+async function writeToFileInDir(base64, dirUri, filename, mimeType) {
   const fileUri = await LegacyFileSystem.StorageAccessFramework.createFileAsync(
-    permissions.directoryUri,
+    dirUri,
     filename,
     mimeType
   );
@@ -106,6 +102,50 @@ async function saveToPickedFolder(base64, filename, mimeType) {
     encoding: LegacyFileSystem.EncodingType.Base64,
   });
   return fileUri;
+}
+
+/**
+ * Open the system folder picker ONCE, pre-selected on the Download folder,
+ * remember the grant, and return the directory URI (or null if cancelled).
+ */
+async function pickExportFolderOnce() {
+  let initialUri = null;
+  try {
+    initialUri =
+      LegacyFileSystem.StorageAccessFramework.getUriForDirectoryInRoot('Download');
+  } catch {
+    initialUri = null;
+  }
+
+  const permissions =
+    await LegacyFileSystem.StorageAccessFramework.requestDirectoryPermissionsAsync(
+      initialUri
+    );
+  if (!permissions?.granted) {
+    return null;
+  }
+
+  await saveExportDirectory(permissions.directoryUri);
+  return permissions.directoryUri;
+}
+
+/**
+ * Save into the remembered folder without any picker. Returns the saved
+ * file URI, or null if there is no remembered folder / it was revoked.
+ */
+async function saveToRememberedFolder(base64, filename, mimeType) {
+  const rememberedDir = await loadExportDirectory();
+  if (!rememberedDir) return null;
+
+  try {
+    return await writeToFileInDir(base64, rememberedDir, filename, mimeType);
+  } catch (error) {
+    // The saved grant no longer works (folder deleted, app data cleared,
+    // Android revoked it) — forget it and let the caller re-prompt once.
+    await clearExportDirectory();
+    console.warn('[resumeDownload] Remembered export folder failed:', error?.message);
+    return null;
+  }
 }
 
 async function openShareSheet(fileUri, mimeType, uti, dialogTitle) {
@@ -126,39 +166,71 @@ async function openShareSheet(fileUri, mimeType, uti, dialogTitle) {
   return { shared: true, uri: fileUri };
 }
 
+/** Post-save confirmation with an inline "share a copy" option. */
+function confirmSavedAlert(savedUri) {
+  return new Promise((resolve) => {
+    Alert.alert(
+      'Saved',
+      'Your resume has been saved to your Downloads folder (or the folder you picked). Open your Files app to find it.',
+      [
+        {
+          text: 'Share a copy',
+          onPress: () => resolve({ savedToDisk: true, shareRequested: true, uri: savedUri }),
+        },
+        {
+          text: 'OK',
+          onPress: () => resolve({ savedToDisk: true, shared: false, uri: savedUri }),
+        },
+      ]
+    );
+  });
+}
+
 /**
- * Present the save UI. Android: an action alert with "Save to Downloads"
- * (guaranteed, user-visible save) and "Share a copy". iOS: the share sheet
- * directly (it includes Save to Files).
+ * Present the save UI.
+ *
+ * Android, returning users (folder already granted): the file is written
+ *   directly — no folder picker, no "create folder" step — followed by a
+ *   Saved confirmation with an optional "Share a copy".
+ * Android, first time: one dialog — "Save to Downloads" (opens the folder
+ *   picker once, pre-selected on Download) or "Share a copy".
+ * iOS: the share sheet directly (it contains "Save to Files").
  */
 async function presentSaveOptions(bytes, { filename, mimeType, uti, dialogTitle }) {
   const data = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes || []);
+  const base64 = bytesToBase64(data);
   const cacheUri = await writeCacheFile(data, filename);
 
   if (Platform.OS === 'android') {
+    // 1) Remembered folder → save directly (the common case after the
+    //    first download; no picker shown at all).
+    const savedUri = await saveToRememberedFolder(base64, filename, mimeType);
+    if (savedUri) {
+      const result = await confirmSavedAlert(savedUri);
+      if (result.shareRequested) {
+        try {
+          await openShareSheet(cacheUri, mimeType, uti, dialogTitle);
+        } catch (error) {
+          console.warn('[resumeDownload] Share after save failed:', error?.message);
+        }
+      }
+      return { ...result, shared: result.shareRequested };
+    }
+
+    // 2) First time (or the remembered grant was revoked) — one-time choice.
     return new Promise((resolve) => {
       Alert.alert(
         dialogTitle || 'Save your resume',
-        'Choose "Save to Downloads" to keep the file on your device, or share a copy with another app.',
+        'Choose "Save to Downloads" to keep it on your device. You only pick the folder once — after that, every download saves there automatically.',
         [
           {
             text: 'Save to Downloads',
             onPress: async () => {
               try {
-                const savedUri = await saveToPickedFolder(
-                  bytesToBase64(data),
-                  filename,
-                  mimeType
-                );
-                if (savedUri) {
-                  Alert.alert(
-                    'Saved',
-                    'Your resume has been saved to the folder you picked (usually Downloads). Open your Files app to find it.'
-                  );
-                  resolve({ savedToDisk: true, uri: savedUri });
-                } else {
-                  // User closed the folder picker — fall back to the share
-                  // sheet so the file is never left in limbo.
+                const dir = await pickExportFolderOnce();
+                if (!dir) {
+                  // Picker dismissed — fall back to the share sheet so the
+                  // file is never left in limbo.
                   const result = await openShareSheet(
                     cacheUri,
                     mimeType,
@@ -166,13 +238,27 @@ async function presentSaveOptions(bytes, { filename, mimeType, uti, dialogTitle 
                     dialogTitle
                   );
                   resolve({ savedToDisk: false, ...result });
+                  return;
                 }
+                const savedUri = await writeToFileInDir(
+                  base64,
+                  dir,
+                  filename,
+                  mimeType
+                );
+                const result = await confirmSavedAlert(savedUri);
+                if (result.shareRequested) {
+                  try {
+                    await openShareSheet(cacheUri, mimeType, uti, dialogTitle);
+                  } catch {}
+                }
+                resolve({ ...result, shared: result.shareRequested });
               } catch (error) {
                 Alert.alert(
                   'Could not save',
                   `${error?.message || 'Saving failed.'} You can try again and pick a different folder.`
                 );
-                resolve({ savedToDisk: false, uri: cacheUri, error: error?.message });
+                resolve({ savedToDisk: false, shared: false, uri: cacheUri, error: error?.message });
               }
             },
           },

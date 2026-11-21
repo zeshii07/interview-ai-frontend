@@ -126,7 +126,9 @@ const QuestionsScreen = () => {
             </View>
           </View>
 
-          <Text style={styles.questionNumber}>Q{index + 1}</Text>
+          <View style={styles.questionNumberChip}>
+            <Text style={styles.questionNumber}>{index + 1}</Text>
+          </View>
         </View>
 
         <Text style={styles.questionText}>{item.question}</Text>
@@ -399,7 +401,6 @@ const styles = StyleSheet.create({
   },
   questionCard: {
     marginBottom: Spacing.md,
-    ...Shadows.small,
   },
   questionHeader: {
     flexDirection: 'row',
@@ -439,10 +440,20 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.4,
   },
+  questionNumberChip: {
+    minWidth: 30,
+    height: 30,
+    borderRadius: Radius.full,
+    paddingHorizontal: 8,
+    backgroundColor: Colors.gradientStart,
+    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   questionNumber: {
-    color: Colors.textMuted,
+    color: '#FFFFFF',
     fontSize: FontSizes.xs,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   questionText: {
     color: Colors.textPrimary,

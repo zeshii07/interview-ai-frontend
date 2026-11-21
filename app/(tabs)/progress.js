@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-nati
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation } from '../../constants/theme';
 import useInterviewStore from '../../store/interviewStore';
 import SectionHeader from '../../components/ui/SectionHeader';
 import ProgressBar from '../../components/ui/ProgressBar';
@@ -39,18 +39,19 @@ export default function ProgressScreen() {
 
       {/* Summary stats */}
       <View style={styles.summaryRow}>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{interviewHistory.length}</Text>
-          <Text style={styles.summaryLabel}>Sessions</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>{avgScore ? avgScore.toFixed(1) : 'N/A'}</Text>
-          <Text style={styles.summaryLabel}>Avg score</Text>
-        </View>
-        <View style={styles.summaryCard}>
-          <Text style={styles.summaryValue}>0</Text>
-          <Text style={styles.summaryLabel}>Streak days</Text>
-        </View>
+        {[
+          { label: 'Sessions', value: String(interviewHistory.length), icon: 'layers-outline', tint: '#4F46E5', tintBg: '#EEF2FF' },
+          { label: 'Avg score', value: avgScore ? avgScore.toFixed(1) : 'N/A', icon: 'star-outline', tint: '#D97706', tintBg: '#FFFBEB' },
+          { label: 'Streak days', value: '0', icon: 'flame-outline', tint: '#E11D48', tintBg: '#FFF1F2' },
+        ].map((stat) => (
+          <View key={stat.label} style={styles.summaryCard}>
+            <View style={[styles.summaryIcon, { backgroundColor: stat.tintBg }]}>
+              <Ionicons name={stat.icon} size={14} color={stat.tint} />
+            </View>
+            <Text style={styles.summaryValue}>{stat.value}</Text>
+            <Text style={styles.summaryLabel}>{stat.label}</Text>
+          </View>
+        ))}
       </View>
 
       {/* Category progress */}
@@ -99,7 +100,7 @@ export default function ProgressScreen() {
               activeOpacity={0.7}
             >
               <View style={styles.sessionIconWrap}>
-                <Ionicons name="chatbubble-outline" size={16} color={Colors.primary} />
+                <Ionicons name="chatbubble-ellipses-outline" size={16} color="#FFFFFF" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sessionRole} numberOfLines={1}>
@@ -115,6 +116,7 @@ export default function ProgressScreen() {
                 label={session.averageScore ? `${session.averageScore}/10` : 'N/A'}
                 variant={session.averageScore >= 7 ? 'success' : session.averageScore >= 5 ? 'warning' : 'error'}
               />
+              <Ionicons name="chevron-forward" size={14} color={Colors.textMuted} />
             </TouchableOpacity>
           ))}
         </View>
@@ -131,7 +133,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPrimary,
   },
   content: {
-    paddingBottom: Spacing.xxl,
+    // extra room so content clears the floating tab bar
+    paddingBottom: Spacing.xxl + 52,
   },
   header: {
     paddingHorizontal: Spacing.md,
@@ -161,9 +164,18 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     padding: Spacing.md,
     alignItems: 'center',
+    gap: 3,
     borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.small,
+    borderColor: Colors.borderLight,
+    ...Elevation.card,
+  },
+  summaryIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: Radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
   },
   summaryValue: {
     fontSize: FontSizes.xxl,
@@ -183,7 +195,7 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     borderWidth: 1,
     borderColor: Colors.border,
-    ...Shadows.small,
+    ...Elevation.card,
   },
   categoryRow: {
     marginBottom: Spacing.md,
@@ -211,7 +223,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
-    ...Shadows.small,
+    ...Elevation.card,
   },
   emptyTitle: {
     fontSize: FontSizes.lg,
@@ -235,10 +247,11 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.borderLight,
   },
   sessionIconWrap: {
-    width: 32,
-    height: 32,
+    width: 34,
+    height: 34,
     borderRadius: Radius.md,
-    backgroundColor: Colors.primaryBg,
+    backgroundColor: Colors.gradientStart,
+    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -174,3 +174,204 @@ The pre-alert ("Choose Save / Share…") also made the flow confusing.
   every page, photo captured as an image op, unicode stress).
 - `npx expo-doctor` — 20/20 checks passed.
 
+## 6. Tools screen redesign + one-time folder pick (this delivery)
+
+### 6.1 All Tools screen — redesigned with varied components
+
+The screen previously used one repeated card style for everything. It now
+has four deliberately different presentations, each tool with its own
+accent color (icon tile tint + 3pt top strip) so the grid feels modern
+instead of monochrome:
+
+| Section | Component | Look |
+| --- | --- | --- |
+| Recommended | `WideToolCard` (featured) | Full-width indigo card, white text |
+| Recommended | `WideToolCard` | Full-width white card, teal-tinted icon tile |
+| All tools | `ToolCard` | 2-column grid, per-tool accent colors |
+| Coming soon | `ComingSoonRow` | Quiet compact rows with a "Soon" pill |
+
+Plus:
+- **Search bar** — filters all sections by title/description/category,
+  with a clear button, live result count and a proper empty state
+  ("No tools found" + reset filters).
+- Category chips kept, now also applied during search.
+
+New/changed files: `constants/tools.js` (per-tool accents + selector
+helpers + `searchTools`), `components/ui/WideToolCard.js`,
+`components/ui/ComingSoonRow.js`, `components/ui/HeroToolCard.js`,
+`components/ui/ToolCard.js` (accent tints), `app/(tabs)/tools.js`.
+
+### 6.2 Home — varied tool components
+
+Home no longer repeats the same card either. The "Your Career Tools"
+section is now:
+
+1. `HeroToolCard` — big indigo flagship card for the ATS Resume Generator
+   (large icon tile, "AI powered" badge, white "Start now" pill, layered
+   gradient overlays like GradientHero).
+2. 2-column `ToolCard` grid — Analyze Your Resume (violet), AI Mock
+   Interview (teal).
+3. `WideToolCard` slim full-width card — Question Bank (amber).
+4. `ComingSoonRow` list — AI Coach, Salary Insights.
+
+### 6.3 Downloads — folder picked once, never again
+
+**User complaint:** the folder picker (with its "create folder" look)
+appeared on every download.
+
+**Fix:** Expo's Storage Access Framework request takes a *persistable*
+grant (verified in the native code: `takePersistableUriPermission`), so
+the picked folder URI is now remembered in AsyncStorage
+(`@hirely_export_directory`, helpers in `utils/storage.js`):
+
+- **First download only:** one dialog — "Save to Downloads" opens the
+  system picker pre-selected on the Download folder (Android 8+; the user
+  just confirms "Use this folder"), or "Share a copy".
+- **Every download after:** the file is written **directly** into the
+  remembered folder — no picker, no dialog — then a "Saved" confirmation
+  appears with an optional "Share a copy" button.
+- If the grant is ever revoked (folder deleted, app data cleared), the
+  code silently forgets it and shows the one-time dialog again.
+
+### Verification for this section
+
+- `npx expo export --platform android` — bundles cleanly (2012 modules).
+- Full resume smoke suite — ALL SMOKE TESTS PASSED (PDF/DOCX/layout for
+  all 6 templates, multi-page pagination, photo, unicode).
+- `npx expo-doctor` — 20/20 checks passed.
+- No usages of the old `ToolCard` `featured`/`comingSoon` props remain
+  (grep-verified); all tool data flows from `constants/tools.js`.
+
+
+## 7. App-wide "premium kit" UI overhaul (this delivery)
+
+Design direction: modern app UI kits (uistore-style banking/fitness apps) —
+depth, colored glows, gradients, tinted icon tiles, floating surfaces.
+No new dependencies; everything is pure React Native styling on the
+existing `experimental_backgroundImage` gradient technique.
+
+### 7.1 Design system foundation (`constants/theme.js`)
+
+- **`Elevation`** — a proper depth vocabulary: `card` (resting white
+  surfaces), `raised` (interactive white surfaces), `overlay` (modals /
+  floating bars), `glowPrimary` / `glowAccent` / `glowSuccess` /
+  `glowError` (brand-colored glows under gradient surfaces).
+- **`Glass`** — frosted tokens: hairlines and fills for dark gradient
+  surfaces, scrim for overlays.
+
+### 7.2 Shared components upgraded (API-compatible — every screen lifts)
+
+| Component | Change |
+| --- | --- |
+| Button | gradient primary + glass hairline + brand glow |
+| Card | interactive cards sit one elevation tier higher than static ones |
+| Badge | pill radius |
+| GradientHero | real hero gradient + pressable glassy icon button + glow |
+| StatCard | REAL SVG progress ring (gradient stroke, white track), gradient dark panel, status pill with tinted dot, glassy buttons |
+| ScoreRing | gradient stroke (was flat single-color) |
+| ProgressBar | brand gradient fill on the primary variant |
+| SelectCard | glow when selected, gradient icon tile, optional accent props |
+| FilterChip | gradient active state + glow; icon always visible |
+| TemplateCard | accent glow when selected |
+| WizardStepper | gradient dots with glow for current/completed steps |
+| FormField | focus state: brand border + soft glow while typing |
+| LoadingOverlay | glassy scrim, overlay-tier panel, gradient loader shell |
+| ErrorState | bigger soft icon circle with highlight ring + shadow |
+| JobCard | full redesign — see below |
+| SectionHeader | refined icon tile |
+
+### 7.3 JobCard redesign
+
+Banking-app feed layout: company avatar tile with stable tinted initials
+(color hashed from the company name), title + "Company · Location" line,
+circular bookmark button (filled + glowing when saved), refined pill row
+(salary / remote / level / provider / posted), gradient match bar.
+
+### 7.4 Floating pill tab bar
+
+The bottom tab bar is now detached from the screen edges (absolute
+position, margins, rounded, hairline border, overlay elevation) — the
+standard premium-kit look. All five tab screens got +52px bottom content
+padding so nothing hides behind the floating bar.
+
+### 7.5 Screen passes
+
+- **Profile** — dark gradient user card (glowing avatar ring, glassy edit
+  button), gradient plan card, tinted icon tiles per menu row (danger row
+  tinted red), pill coming-soon badges.
+- **Progress** — summary stat cards with tinted icon chips, gradient
+  session-row icons, chevrons on rows.
+- **Questions** — Q-numbers became gradient chips; type/difficulty badges
+  refined.
+- **Login** — gradient CTA with glass hairline + stronger glow, gradient
+  checkbox.
+- **Onboarding** — emoji now sits in a large soft tinted circle with glow,
+  gradient active dot, gradient next button. **Bug fixed:** slide 2 used
+  non-existent `Colors.secondary` (invalid color string) — now `accent`.
+- **Home / Tools** — search-bar focus glow, gradient practice-CTA icon.
+
+### Verification for this section
+
+- `npx expo export --platform android` — bundles cleanly (see log).
+- Resume smoke suite — unchanged paths, re-run green.
+- `npx expo-doctor` — 20/20.
+- Grep-verified: no dangling `Shadows`/`Colors.secondary` references.
+
+### 7.6 Hotfix — runtime crash on interview routes
+
+**Symptom:** app failed to start on device with
+`ReferenceError: Property 'Shadows' doesn't exist` (SelectCard.js:90),
+plus "missing required default export" warnings for
+`./interview/preferences.js`, `./interview/role.js`, `./interview/type.js`.
+
+**Root cause:** during the overhaul, SelectCard's import line was updated
+(`Shadows` → `Elevation`) but a second edit block failed to match the
+file's actual style ordering and silently no-op'd, leaving
+`...Shadows.small` in the styles. Metro bundles without executing module
+code, so the export check passed while the module crashed when evaluated.
+The route warnings were fallout — a route module that throws while loading
+has no default export as far as expo-router is concerned.
+
+**Fix:** `cardSelected` now uses `...Elevation.glowPrimary` and the
+selected icon tile got its intended gradient.
+
+**New guard:** `scripts/check_theme_imports.js` — statically scans every
+file under `app/` and `components/` for theme-token usages
+(`Shadows.x`, `Elevation.x`, `Glass.x`, `Colors.x`, …) that are not
+imported from `constants/theme`. This exact bug class (bundles fine,
+crashes at runtime) is now caught before shipping. Current run: 66 files
+scanned, clean.
+
+**Note:** the `API retry ... /api/interview/readiness` /
+`/api/jobs/search` warnings in the same log are NOT part of this crash —
+they mean the app could not reach your backend (it retries twice, then
+shows an error state with a retry button). Start the backend / check the
+API base URL and those disappear.
+
+### 7.7 Hotfix — tab bar invisible on Android (app felt "stuck on one screen")
+
+**Symptom:** app started fine but showed no navigation controls — no way
+to switch tabs, and the Android back button exited the app (because at
+the root screen there is nothing to pop, and it was the only navigation
+left).
+
+**Root cause:** the v3 "floating pill" tab bar set a custom `height: 72`
+plus `position: 'absolute'` in `tabBarStyle`. On Expo SDK 58 /
+RN 0.88, edge-to-edge is enforced on Android; when an explicit `height`
+is present, React Navigation uses it as the TOTAL bar height and skips
+adding the bottom safe-area inset. The bar's icons and labels ended up
+behind the system gesture/navigation area — invisible and untappable.
+
+**Fix:** `app/(tabs)/_layout.js` rewritten as an attached (non-floating)
+bar that overrides only VISUAL keys — background color, hairline top
+border, shadow/elevation, label typography — and lets
+@react-navigation/bottom-tabs compute the height and safe-area padding
+itself. That is the pattern that renders correctly under edge-to-edge
+(gesture nav, 3-button nav) and on iOS.
+
+**Back button behavior (unchanged, by design):** hardware back pops any
+pushed screen (interview flow, job details, settings, resume tools —
+all verified to have working back affordances, including the headerless
+screens: role/preferences have arrow-back headers, interview/type has
+an X dismiss). At the root (Home tab) back exits the app — this is the
+standard Android convention used by every major app.

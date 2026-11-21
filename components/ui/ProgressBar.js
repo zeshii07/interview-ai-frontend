@@ -39,6 +39,11 @@ export default function ProgressBar({
           height: '100%',
           backgroundColor: fillColor,
           borderRadius: height / 2,
+          // Brand gradient on the primary variant (experimental_backgroundImage
+          // degrades gracefully to the solid backgroundColor elsewhere).
+          ...(variant === 'primary'
+            ? { experimental_backgroundImage: 'linear-gradient(90deg, #4F46E5 0%, #7C3AED 100%)' }
+            : null),
         }}
       />
     </View>

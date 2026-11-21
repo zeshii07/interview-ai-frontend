@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation } from '../../constants/theme';
 
 /**
  * FilterChip
@@ -34,12 +34,23 @@ export default function FilterChip({
       style={[
         styles.chip,
         selected
-          ? { backgroundColor: activeColor, borderColor: activeColor }
+          ? {
+              backgroundColor: activeColor,
+              borderColor: activeColor,
+              experimental_backgroundImage:
+                'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+              ...Elevation.glowPrimary,
+            }
           : { backgroundColor: Colors.bgCard, borderColor: Colors.border },
       ]}
     >
-      {selected && icon && typeof icon === 'string' ? (
-        <Ionicons name={icon} size={11} color="#FFFFFF" style={{ marginRight: 4 }} />
+      {icon && typeof icon === 'string' ? (
+        <Ionicons
+          name={icon}
+          size={11}
+          color={selected ? '#FFFFFF' : Colors.textSecondary}
+          style={{ marginRight: 4 }}
+        />
       ) : null}
       <Text
         style={[

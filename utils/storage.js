@@ -9,6 +9,7 @@ const KEYS = {
   LAST_WORKING_ROUTE: '@hirely_last_working_route',
   RESUME_BUILDER: '@hirely_resume_builder',
   INTERVIEW_SESSION: '@hirely_interview_session',
+  EXPORT_DIRECTORY: '@hirely_export_directory',
 };
 
 export const DEFAULT_PREFERENCES = { language: 'English', acceptedTerms: false };
@@ -151,3 +152,33 @@ export const clearPrivateWorkingState = async () => {
     console.error('Failed to clear private working state:', error);
   }
 };
+
+// ---------- download/export folder (Android) ----------
+//
+// The folder the user picked once (Storage Access Framework grant) for
+// saving resumes. Expo's SAF takes a PERSISTABLE grant, so the URI stays
+// valid across app restarts — remembering it lets every download go
+// straight to that folder without showing the folder picker again.
+
+export const loadExportDirectory = async () => {
+  try {
+    const uri = await AsyncStorage.getItem(KEYS.EXPORT_DIRECTORY);
+    return uri || null;
+  } catch {
+    return null;
+  }
+};
+
+export const saveExportDirectory = async (uri) => {
+  try {
+    if (uri) {
+      await AsyncStorage.setItem(KEYS.EXPORT_DIRECTORY, uri);
+    } else {
+      await AsyncStorage.removeItem(KEYS.EXPORT_DIRECTORY);
+    }
+  } catch (error) {
+    console.error('Failed to remember the export folder:', error);
+  }
+};
+
+export const clearExportDirectory = () => saveExportDirectory(null);

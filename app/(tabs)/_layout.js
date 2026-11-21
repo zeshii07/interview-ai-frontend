@@ -1,20 +1,28 @@
 import { useEffect, useRef } from 'react';
-import { Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Shadows } from '../../constants/theme';
+import { Colors, FontSizes } from '../../constants/theme';
 import useInterviewStore from '../../store/interviewStore';
 import { getCurrentUser } from '../../services/authService';
 
 /**
  * Tab bar for the 5 primary tabs (Home, Tools, Progress, Profile, Jobs).
  *
- * NOTE: `Tabs` is imported from the main 'expo-router' entry — the canonical
- * import. The old code imported from 'expo-router/js-tabs' and rendered a
- * dead-end "fallback mode" screen if the import came back undefined; that
- * fallback showed users an error page instead of the app. If Tabs ever fails
- * to load, the ErrorBoundary in app/_layout.js now handles it properly.
+ * EDGE-TO-EDGE NOTE (SDK 58 / RN 0.88): edge-to-edge is enforced on
+ * Android, so the system gesture/nav bar overlaps app content. The tab
+ * bar therefore must NOT set a custom `height` (or position/padding) in
+ * `tabBarStyle`: when an explicit height is present, React Navigation
+ * uses it as the TOTAL height and skips adding the bottom safe-area
+ * inset — the icons/labels end up hidden behind the gesture area and the
+ * bar appears missing entirely (no way to switch tabs).
+ *
+ * The reliable pattern (and what this file follows) is to override only
+ * VISUAL keys — background, top hairline, shadow, label typography — and
+ * let @react-navigation/bottom-tabs compute the height +
+ * `insets.bottom` itself. That renders correctly on gesture nav,
+ * 3-button nav, and iOS.
  */
 export default function TabLayout() {
   const initializeApp = useInterviewStore((state) => state.initializeApp);
@@ -36,36 +44,33 @@ export default function TabLayout() {
   return (
     <Tabs
       screenOptions={{
-        // Taller tab bar with bigger touch targets, bigger labels, and more
-        // padding so labels are clearly visible above the icons.
+        // Attached (non-floating) bar on a solid card background with a
+        // hairline top border and a soft shadow. No height / position /
+        // padding overrides — see the note above.
         tabBarStyle: {
           backgroundColor: Colors.bgCard,
-          borderTopColor: Colors.border,
-          borderTopWidth: 1,
-          paddingTop: Spacing.sm + 2,
-          paddingBottom: Platform.OS === 'ios' ? Spacing.md : Spacing.sm + 4,
-          height: Platform.OS === 'ios' ? 92 : 76,
-          ...Shadows.small,
+          borderTopColor: Colors.borderLight,
+          borderTopWidth: StyleSheet.hairlineWidth,
+          // Visual-only shadow keys; these do not affect layout.
+          elevation: 8,
+          shadowColor: '#0F172A',
+          shadowOpacity: 0.08,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: -4 },
         },
         tabBarActiveTintColor: Colors.primary,
         tabBarInactiveTintColor: Colors.textMuted,
 
+        // Compact labels — small enough to fit the default tab bar
+        // height without clipping on any device.
         tabBarLabelStyle: {
-          fontSize: FontSizes.sm - 1, // 12pt — readable
-          fontWeight: '700',
-          marginTop: 4,
+          fontSize: FontSizes.xs, // 11pt
+          fontWeight: '600',
+          marginTop: 2,
           letterSpacing: 0.2,
         },
 
-        tabBarIconStyle: {
-          marginTop: 0,
-          marginBottom: 0,
-        },
-        tabBarItemStyle: {
-          paddingVertical: 4,
-        },
-
-        // Hide the header on the tab level — each tab defines its own header
+        // Per-tab headers (Tools/Progress/Profile/Jobs show one).
         headerStyle: { backgroundColor: Colors.bgPrimary },
         headerTintColor: Colors.textPrimary,
         headerTitleStyle: { fontWeight: '700' },

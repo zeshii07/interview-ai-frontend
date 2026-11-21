@@ -5,7 +5,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation, Glass, Gradients } from '../../constants/theme';
 import { getCurrentUser, logoutUser, onProfileChange } from '../../services/authService';
 import { subscribeProfilePhoto } from '../../services/profilePhotoService';
 import Button from '../../components/ui/Button';
@@ -57,13 +57,13 @@ export default function ProfileScreen() {
   };
 
   const menuItems = [
-    { icon: 'person-outline', label: 'Edit profile', route: '/settings/edit-profile' },
-    { icon: 'document-text-outline', label: 'Resume management', route: '/resume/generator' },
-    { icon: 'notifications-outline', label: 'Notifications', route: '/settings/index', badge: 'Coming soon' },
-    { icon: 'moon-outline', label: 'Dark mode', route: '/settings/index', badge: 'Coming soon' },
-    { icon: 'shield-checkmark-outline', label: 'Privacy & security', route: '/settings/index' },
-    { icon: 'information-circle-outline', label: 'About Hirely', route: '/settings/about' },
-    { icon: 'trash-outline', label: 'Delete account', route: '/settings/delete-account', danger: true },
+    { icon: 'person-outline', label: 'Edit profile', route: '/settings/edit-profile', tint: '#4F46E5', tintBg: '#EEF2FF' },
+    { icon: 'document-text-outline', label: 'Resume management', route: '/resume/generator', tint: '#7C3AED', tintBg: '#F5F3FF' },
+    { icon: 'notifications-outline', label: 'Notifications', route: '/settings/index', badge: 'Coming soon', tint: '#D97706', tintBg: '#FFFBEB' },
+    { icon: 'moon-outline', label: 'Dark mode', route: '/settings/index', badge: 'Coming soon', tint: '#2563EB', tintBg: '#EFF6FF' },
+    { icon: 'shield-checkmark-outline', label: 'Privacy & security', route: '/settings/index', tint: '#059669', tintBg: '#ECFDF5' },
+    { icon: 'information-circle-outline', label: 'About Hirely', route: '/settings/about', tint: '#64748B', tintBg: '#F8FAFC' },
+    { icon: 'trash-outline', label: 'Delete account', route: '/settings/delete-account', danger: true, tint: '#EF4444', tintBg: 'rgba(239, 68, 68, 0.10)' },
   ];
 
   return (
@@ -123,11 +123,18 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons
-                name={item.icon}
-                size={18}
-                color={item.danger ? Colors.error : Colors.textSecondary}
-              />
+              <View
+                style={[
+                  styles.menuTile,
+                  { backgroundColor: item.danger ? Colors.errorBg : item.tintBg },
+                ]}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={16}
+                  color={item.danger ? Colors.error : item.tint}
+                />
+              </View>
               <Text style={[styles.menuItemText, item.danger && styles.menuItemTextDanger]}>
                 {item.label}
               </Text>
@@ -166,7 +173,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgPrimary,
   },
   content: {
-    paddingBottom: Spacing.xxl,
+    // extra room so content clears the floating tab bar
+    paddingBottom: Spacing.xxl + 52,
   },
   header: {
     paddingHorizontal: Spacing.md,
@@ -184,19 +192,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     marginHorizontal: Spacing.md,
-    backgroundColor: Colors.bgCard,
-    borderRadius: Radius.lg,
+    ...Gradients.darkPanel,
+    borderRadius: Radius.xl,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadows.small,
+    borderColor: Glass.hairlineOnDark,
+    overflow: 'hidden',
+    ...Elevation.glowAccent,
   },
   avatar: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.gradientStart,
-    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
+    backgroundColor: 'rgba(255, 255, 255, 0.16)',
+    borderWidth: 2,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
@@ -213,19 +223,22 @@ const styles = StyleSheet.create({
   },
   userName: {
     fontSize: FontSizes.lg,
-    fontWeight: '700',
-    color: Colors.textPrimary,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: -0.2,
   },
   userEmail: {
     fontSize: FontSizes.sm,
-    color: Colors.textMuted,
+    color: 'rgba(255, 255, 255, 0.72)',
     marginTop: 2,
   },
   editButton: {
     width: 36,
     height: 36,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.primaryBg,
+    borderRadius: Radius.full,
+    backgroundColor: Glass.fillOnDark,
+    borderWidth: 1,
+    borderColor: Glass.hairlineOnDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -235,11 +248,12 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginHorizontal: Spacing.md,
     marginTop: Spacing.sm,
-    backgroundColor: Colors.accentBg,
+    ...Gradients.cta,
     borderRadius: Radius.lg,
     padding: Spacing.md,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Glass.hairlineOnDark,
+    ...Elevation.glowPrimary,
   },
   planLeft: {
     flexDirection: 'row',
@@ -250,11 +264,11 @@ const styles = StyleSheet.create({
   planTitle: {
     fontSize: FontSizes.md,
     fontWeight: '700',
-    color: Colors.textPrimary,
+    color: '#FFFFFF',
   },
   planSubtitle: {
     fontSize: FontSizes.xs,
-    color: Colors.textMuted,
+    color: 'rgba(255, 255, 255, 0.75)',
     marginTop: 2,
   },
   menuCard: {
@@ -263,9 +277,9 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     borderRadius: Radius.lg,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.borderLight,
     overflow: 'hidden',
-    ...Shadows.small,
+    ...Elevation.card,
   },
   menuItem: {
     flexDirection: 'row',
@@ -281,7 +295,14 @@ const styles = StyleSheet.create({
   menuItemLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.md,
+    gap: Spacing.sm + 2,
+  },
+  menuTile: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   menuItemText: {
     fontSize: FontSizes.md,

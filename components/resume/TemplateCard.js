@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation } from '../../constants/theme';
 
 /**
  * TemplateCard
@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
   },
   cardSelected: {
     backgroundColor: Colors.primaryBg,
-    ...Shadows.small,
+    ...Elevation.glowPrimary,
   },
   iconWrap: {
     width: 44,

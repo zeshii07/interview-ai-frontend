@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity } from 'react-native';
 
-import { Colors, Radius, Shadows, Spacing } from '../../constants/theme';
+import { Colors, Radius, Elevation, Spacing } from '../../constants/theme';
 
 /**
  * Card — the generic design-system card container.
@@ -28,7 +28,15 @@ export default function Card({ children, style, padding = 'md', variant = 'defau
   };
   const pad = paddings[padding] !== undefined ? paddings[padding] : paddings.md;
 
-  const baseStyle = [styles.card, { padding: pad }, variant === 'error' && styles.cardError, style];
+  // Interactive cards sit one elevation tier higher than static ones —
+  // depth signals "this moves when you touch it".
+  const baseStyle = [
+    styles.card,
+    { padding: pad },
+    variant === 'error' && styles.cardError,
+    onPress && styles.cardRaised,
+    style,
+  ];
 
   if (onPress) {
     return (
@@ -47,7 +55,10 @@ const styles = StyleSheet.create({
     borderRadius: Radius.lg,
     borderWidth: 1,
     borderColor: Colors.borderLight,
-    ...Shadows.small,
+    ...Elevation.card,
+  },
+  cardRaised: {
+    ...Elevation.raised,
   },
   cardError: {
     borderColor: Colors.error,

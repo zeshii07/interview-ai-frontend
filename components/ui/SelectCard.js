@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation } from '../../constants/theme';
 
 /**
  * SelectCard
@@ -25,6 +25,8 @@ export default function SelectCard({
   selected = false,
   onPress,
   trailing,
+  accent,
+  accentBg,
 }) {
   return (
     <TouchableOpacity
@@ -35,12 +37,18 @@ export default function SelectCard({
         selected && styles.cardSelected,
       ]}
     >
-      <View style={[styles.iconWrap, selected && styles.iconWrapSelected]}>
+      <View
+        style={[
+          styles.iconWrap,
+          { backgroundColor: accentBg || Colors.primaryBg },
+          selected && styles.iconWrapSelected,
+        ]}
+      >
         {icon && typeof icon === 'string' ? (
           <Ionicons
             name={icon}
             size={20}
-            color={selected ? '#FFFFFF' : Colors.primary}
+            color={selected ? '#FFFFFF' : accent || Colors.primary}
           />
         ) : null}
       </View>
@@ -79,7 +87,7 @@ const styles = StyleSheet.create({
   cardSelected: {
     borderColor: Colors.primary,
     backgroundColor: Colors.primaryBg,
-    ...Shadows.small,
+    ...Elevation.glowPrimary,
   },
   iconWrap: {
     width: 44,
@@ -91,6 +99,7 @@ const styles = StyleSheet.create({
   },
   iconWrapSelected: {
     backgroundColor: Colors.primary,
+    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
   },
   title: {
     fontSize: FontSizes.md,

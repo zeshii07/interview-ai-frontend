@@ -2,7 +2,7 @@ import React from 'react';
 import { Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius, Shadows } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation, Glass } from '../../constants/theme';
 
 /**
  * Button
@@ -111,12 +111,15 @@ const variantStyles = StyleSheet.create({
   primary: {
     backgroundColor: Colors.gradientStart,
     experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
-    ...Shadows.primary,
+    borderWidth: 1,
+    borderColor: Glass.hairlineOnDark,
+    ...Elevation.glowPrimary,
   },
   secondary: {
     backgroundColor: Colors.bgCard,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.primary,
+    ...Elevation.card,
   },
   ghost: {
     backgroundColor: 'transparent',

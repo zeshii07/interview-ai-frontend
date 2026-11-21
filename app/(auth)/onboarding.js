@@ -17,7 +17,7 @@ const slides = [
     emoji: '📝',
     title: 'Instant Feedback',
     description: 'Get detailed scores on structure, content, and communication. Know exactly how to improve.',
-    bgColor: Colors.secondary + '15',
+    bgColor: Colors.accent + '15',
   },
   {
     id: 3,
@@ -153,9 +153,23 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginTop: -2,
   },
-  emoji: {
-    fontSize: 80,
+  emojiWrap: {
+    width: 150,
+    height: 150,
+    borderRadius: 75,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: Spacing.xl,
+    borderWidth: 1,
+    borderColor: 'rgba(79, 70, 229, 0.10)',
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 6,
+  },
+  emoji: {
+    fontSize: 72,
   },
   title: {
     color: Colors.textPrimary,
@@ -184,7 +198,8 @@ const styles = StyleSheet.create({
     marginHorizontal: Spacing.xs,
   },
   dotActive: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.gradientStart,
+    experimental_backgroundImage: 'linear-gradient(90deg, #4F46E5 0%, #7C3AED 100%)',
     width: 30,
   },
   footer: {
@@ -202,7 +217,8 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   nextButton: {
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.gradientStart,
+    experimental_backgroundImage: 'linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)',
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.md,
     borderRadius: Radius.full,

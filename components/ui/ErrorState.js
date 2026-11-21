@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Glass } from '../../constants/theme';
 
 /**
  * ErrorState — reskinned with the new palette.
@@ -74,12 +74,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.xl,
   },
   iconWrap: {
-    width: 72,
-    height: 72,
+    width: 76,
+    height: 76,
     borderRadius: Radius.full,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: Glass.hairlineOnLight,
+    // layered tint: same hue family as the icon, one step wider
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.10,
+    shadowRadius: 16,
+    elevation: 3,
   },
   title: {
     fontSize: FontSizes.lg,

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
 
-import { Colors, Spacing, FontSizes, Radius } from '../../constants/theme';
+import { Colors, Spacing, FontSizes, Radius, Elevation } from '../../constants/theme';
 
 /**
  * FormField
@@ -32,6 +32,8 @@ export default function FormField({
   helperText,
   maxLength,
 }) {
+  const [focused, setFocused] = useState(false);
+
   return (
     <View style={styles.container}>
       {label ? (
@@ -41,7 +43,11 @@ export default function FormField({
         </View>
       ) : null}
       <TextInput
-        style={[styles.input, multiline && styles.inputMultiline]}
+        style={[
+          styles.input,
+          multiline && styles.inputMultiline,
+          focused && styles.inputFocused,
+        ]}
         value={value || ''}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -51,6 +57,8 @@ export default function FormField({
         autoCapitalize={autoCapitalize}
         maxLength={maxLength}
         textAlignVertical={multiline ? 'top' : 'center'}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
       />
       {helperText ? (
         <Text style={styles.helperText}>{helperText}</Text>
@@ -93,6 +101,16 @@ const styles = StyleSheet.create({
   inputMultiline: {
     minHeight: 100,
     paddingTop: Spacing.sm + 2,
+  },
+  inputFocused: {
+    borderColor: Colors.primary,
+    borderWidth: 1.5,
+    // soft brand glow while typing — the "alive input" feel of premium kits
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    elevation: 2,
   },
   helperText: {
     fontSize: FontSizes.xs,

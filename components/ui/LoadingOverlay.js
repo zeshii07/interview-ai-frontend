@@ -1,6 +1,6 @@
 import React from 'react';
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
-import { Colors, FontSizes, Radius, Shadows, Spacing } from '../../constants/theme';
+import { Colors, FontSizes, Radius, Elevation, Glass, Gradients, Spacing } from '../../constants/theme';
 
 const LoadingOverlay = ({
   visible = true,
@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.overlay || 'rgba(7, 10, 18, 0.78)',
+    backgroundColor: Glass.scrim,
     padding: Spacing.xl,
   },
   panel: {
@@ -51,16 +51,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.bgCard,
     paddingHorizontal: Spacing.xl,
     paddingVertical: Spacing.xl,
-    ...Shadows.small,
+    ...Elevation.overlay,
   },
   loaderShell: {
-    width: 64,
-    height: 64,
+    width: 68,
+    height: 68,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 32,
-    backgroundColor: Colors.primaryBg,
+    borderRadius: 34,
+    ...Gradients.cta,
     marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: Glass.hairlineOnDark,
   },
   message: {
     color: Colors.textPrimary,
